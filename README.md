@@ -2,6 +2,8 @@
 
 An imbalance-aware, **leakage-free** binary classification pipeline — and a forensic case study of how a data leak manufactured a validation ROC-AUC of **0.997 out of pure noise**.
 
+**▶ [Live case-file dashboard](https://safdar-hussain1.github.io/disease-prediction/)** — the full audit as interactive exhibits, including a live decision-threshold lab on real held-out predictions.
+
 ![Leaky vs honest evaluation](reports/figures/leaky_vs_honest.png)
 
 ## The story

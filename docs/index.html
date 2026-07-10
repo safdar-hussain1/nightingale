@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Case File — Anatomy of a "Perfect" Classifier</title>
+<meta name="description" content="Forensic case study: how data leakage manufactured ROC-AUC 0.997 from pure noise — and what honest evaluation looks like.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" integrity="sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC" crossorigin="anonymous"></script>
+<style>
+:root{
+  --paper:#fbfaf7; --card:#ffffff; --ink:#191813; --ink-2:#55534c; --ink-3:#8f8d84;
+  --line:#e5e3da; --rule:#191813;
+  --blue:#2a78d6; --blue-dk:#0d366b; --red:#c2312f; --red-ink:#a02422; --aqua:#1baf7a;
+}
+*{box-sizing:border-box; margin:0}
+body{background:var(--paper); color:var(--ink); font:15.5px/1.65 "IBM Plex Mono",monospace}
+.wrap{max-width:920px; margin:0 auto; padding:0 24px}
+::selection{background:#f6d5d4}
+
+/* case header */
+.filehead{border-bottom:3px double var(--rule); padding:26px 0 22px}
+.stampline{display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;
+  font:500 12px/1 "IBM Plex Mono",monospace; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-2)}
+.stamp{border:2px solid var(--red); color:var(--red); padding:6px 12px; border-radius:2px;
+  font-weight:600; transform:rotate(-2deg); letter-spacing:.18em}
+h1{font-family:"Source Serif 4",serif; font-weight:700; font-size:clamp(2rem,5.2vw,3.3rem);
+  line-height:1.08; letter-spacing:-.01em; margin:22px 0 14px}
+h1 em{font-style:italic; color:var(--red-ink)}
+.lede{max-width:62ch; color:var(--ink-2)}
+.meta{margin-top:16px; display:flex; gap:26px; flex-wrap:wrap; font-size:12.5px; color:var(--ink-3)}
+.meta b{color:var(--ink); font-weight:500}
+
+/* verdict strip */
+.verdict{display:grid; grid-template-columns:repeat(3,1fr); gap:1.5px; background:var(--rule);
+  border:1.5px solid var(--rule); margin:30px 0 8px}
+.v-cell{background:var(--card); padding:18px 18px 14px; position:relative}
+.v-cell .n{font:600 clamp(1.7rem,3.4vw,2.4rem)/1 "IBM Plex Mono",monospace}
+.v-cell .n.bad{color:var(--red); text-decoration:line-through; text-decoration-thickness:3px}
+.v-cell .n.flat{color:var(--ink-3)}
+.v-cell .n.good{color:var(--blue)}
+.v-cell .d{font-size:11.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3); margin-top:8px; line-height:1.5}
+
+/* exhibits */
+section{padding:46px 0 4px}
+.ex-head{display:flex; align-items:baseline; gap:14px; border-top:1.5px solid var(--rule); padding-top:12px}
+.ex-tag{font:600 12px "IBM Plex Mono",monospace; letter-spacing:.16em; color:var(--paper);
+  background:var(--ink); padding:4px 9px; border-radius:2px; white-space:nowrap}
+h2{font-family:"Source Serif 4",serif; font-weight:600; font-size:1.45rem; letter-spacing:0}
+.ex-note{color:var(--ink-2); max-width:66ch; margin:12px 0 20px; font-size:14.5px}
+.card{background:var(--card); border:1.5px solid var(--rule); padding:20px}
+.chartbox{position:relative; height:300px}
+.caption{font-size:12px; color:var(--ink-3); margin-top:10px}
+
+/* leak diagram */
+.leakfig{display:grid; grid-template-columns:1fr 1fr; gap:20px}
+.leakfig .card{padding:14px}
+.leakfig h3{font:600 13px "IBM Plex Mono",monospace; letter-spacing:.06em; margin-bottom:8px}
+.leakfig svg{width:100%; height:auto; display:block}
+.klegend{display:flex; gap:18px; margin-top:14px; font-size:12px; color:var(--ink-2); flex-wrap:wrap}
+.klegend span{display:inline-flex; align-items:center; gap:7px}
+.dot{width:10px; height:10px; border-radius:50%; display:inline-block}
+
+/* threshold lab */
+.lab{background:var(--card); border:1.5px solid var(--rule); padding:22px}
+.lab-controls{display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:18px}
+.lab-controls label{font:600 13px "IBM Plex Mono",monospace; letter-spacing:.08em}
+.lab-controls output{font:600 16px "IBM Plex Mono",monospace; color:var(--blue); min-width:52px}
+input[type=range]{flex:1; min-width:200px; accent-color:var(--blue); height:28px; cursor:pointer}
+.lab-grid{display:grid; grid-template-columns:1.15fr 1fr; gap:20px; align-items:start}
+.cm{display:grid; grid-template-columns:auto 1fr 1fr; gap:6px; font-size:12.5px}
+.cm .h{color:var(--ink-3); align-self:center; text-transform:uppercase; letter-spacing:.08em; font-size:10.5px}
+.cm .cell{border-radius:3px; padding:16px 10px; text-align:center; font-weight:600; font-size:19px; transition:background .15s}
+.cm .cell small{display:block; font-weight:400; font-size:10.5px; letter-spacing:.08em; margin-top:4px; opacity:.75}
+.statrow{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:18px}
+.stat{border:1.5px solid var(--line); border-radius:3px; padding:10px 12px}
+.stat .sv{font:600 20px "IBM Plex Mono",monospace}
+.stat .sk{font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3)}
+
+/* findings list */
+.rulings{list-style:none; counter-reset:r}
+.rulings li{counter-increment:r; border-top:1px solid var(--line); padding:16px 0 16px 56px; position:relative; max-width:72ch}
+.rulings li::before{content:counter(r,decimal-leading-zero); position:absolute; left:0; top:16px;
+  font:600 13px "IBM Plex Mono",monospace; color:var(--red-ink)}
+.rulings b{font-weight:600}
+.rulings .why{color:var(--ink-2); font-size:14px}
+
+footer{margin-top:60px; border-top:3px double var(--rule); padding:20px 0 44px; font-size:12.5px;
+  color:var(--ink-2); display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap}
+footer a{color:var(--blue); text-decoration:none}
+
+@media (max-width:760px){
+  .verdict{grid-template-columns:1fr}
+  .leakfig,.lab-grid{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){ .cm .cell{transition:none} }
+</style>
+</head>
+<body>
+
+<header class="filehead">
+  <div class="wrap">
+    <div class="stampline">
+      <span>CASE FILE · ML-2024-085 · MODEL EVALUATION AUDIT</span>
+      <span class="stamp">SCORE FABRICATED</span>
+    </div>
+    <h1>Anatomy of a <em>“perfect”</em> classifier</h1>
+    <p class="lede">A disease-prediction model reported validation ROC-AUC 0.997. The audit below shows the score was
+       manufactured by data leakage — the dataset was pure noise — and demonstrates what the same pipeline reports
+       when evaluated honestly.</p>
+    <div class="meta">
+      <span>subject: <b>binary diagnosis, 4,000 patients</b></span>
+      <span>prevalence: <b>4.9% positive</b></span>
+      <span>features: <b>10, anonymized</b></span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="verdict" role="group" aria-label="Verdict summary">
+    <div class="v-cell"><div class="n bad">0.997</div><div class="d">claimed ROC-AUC<br>ADASYN before split — leaked</div></div>
+    <div class="v-cell"><div class="n flat">≈ 0.50</div><div class="d">honest ROC-AUC, same data<br>chance level: features are noise</div></div>
+    <div class="v-cell"><div class="n good">0.995</div><div class="d">same pipeline, real data<br>wisconsin breast cancer, leak-free</div></div>
+  </div>
+
+  <section id="exhibit-a">
+    <div class="ex-head"><span class="ex-tag">EXHIBIT A</span><h2>The mechanism of the leak</h2></div>
+    <p class="ex-note">ADASYN/SMOTE create synthetic minority patients by interpolating between real ones.
+       Done <b>before</b> the train/validation split, the interpolations of validation patients land in the
+       training set — the model then “recognises” validation cases it has effectively already seen.</p>
+    <div class="leakfig">
+      <div class="card">
+        <h3>① Oversample first…</h3>
+        <svg id="svgLeak1" viewBox="0 0 300 220" role="img" aria-label="Real minority points with synthetic interpolated points between them"></svg>
+      </div>
+      <div class="card">
+        <h3>② …then split: copies cross the line</h3>
+        <svg id="svgLeak2" viewBox="0 0 300 220" role="img" aria-label="The same points split into train and validation, synthetic near-copies on both sides"></svg>
+      </div>
+    </div>
+    <div class="klegend">
+      <span><i class="dot" style="background:var(--red)"></i>real minority patient</span>
+      <span><i class="dot" style="background:#e9a4a3"></i>synthetic (interpolated)</span>
+      <span><i class="dot" style="background:var(--ink-3); width:14px; height:2px; border-radius:0"></i>train / validation boundary</span>
+    </div>
+  </section>
+
+  <section id="exhibit-b">
+    <div class="ex-head"><span class="ex-tag">EXHIBIT B</span><h2>Honest protocol, same data: chance</h2></div>
+    <p class="ex-note">Split first; SMOTE and scaling re-fit inside each stratified CV fold (<code>imblearn.Pipeline</code>).
+       Four tuned model families all land at ROC-AUC ≈ 0.5 — while the leaky protocol conjures 0.99 from the same rows.
+       Mutual information between every feature and the diagnosis: ≤ 0.002.</p>
+    <div class="card">
+      <div class="chartbox"><canvas id="cAuc" role="img" aria-label="Bar chart comparing honest validation ROC-AUC of four models near 0.5 against the leaky protocol at 0.99"></canvas></div>
+      <div class="caption">Validation ROC-AUC. Dashed line = chance (0.5). Grid-searched with stratified 5-fold CV; full protocol in the repo.</div>
+    </div>
+  </section>
+
+  <section id="exhibit-c">
+    <div class="ex-head"><span class="ex-tag">EXHIBIT C</span><h2>The pipeline works when signal exists</h2></div>
+    <p class="ex-note">Same code path on the Wisconsin breast-cancer dataset (569 tumours, 30 features, 1 = malignant):
+       honest, leak-free ROC-AUC 0.995. Below are its <b>114 real held-out predictions</b> — drag the decision threshold
+       and watch the trade-off a deployed screening model must make.</p>
+
+    <div class="lab">
+      <div class="lab-controls">
+        <label for="thr">decision threshold</label>
+        <input type="range" id="thr" min="0.02" max="0.98" step="0.01" value="0.5"
+               aria-describedby="throut">
+        <output id="throut" for="thr">0.50</output>
+      </div>
+      <div class="lab-grid">
+        <div>
+          <div class="chartbox" style="height:230px"><canvas id="cProbs" role="img" aria-label="Dot plot of predicted probabilities for benign and malignant validation cases with the threshold line"></canvas></div>
+          <div class="caption">Each dot = one patient’s predicted malignancy probability. Blue = actually benign, red = actually malignant.</div>
+        </div>
+        <div>
+          <div class="cm" aria-live="polite">
+            <span></span><span class="h" style="text-align:center">pred benign</span><span class="h" style="text-align:center">pred malignant</span>
+            <span class="h">actual benign</span><div class="cell" id="tn"></div><div class="cell" id="fp"></div>
+            <span class="h">actual malignant</span><div class="cell" id="fn"></div><div class="cell" id="tp"></div>
+          </div>
+          <div class="statrow">
+            <div class="stat"><div class="sv" id="sPrec">—</div><div class="sk">precision</div></div>
+            <div class="stat"><div class="sv" id="sRec">—</div><div class="sk">recall</div></div>
+            <div class="stat"><div class="sv" id="sF1">—</div><div class="sk">F1</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="rulings">
+    <div class="ex-head"><span class="ex-tag">RULINGS</span><h2>What this audit establishes</h2></div>
+    <ul class="rulings">
+      <li><b>Resample after you split, never before.</b><div class="why">Putting the oversampler inside the pipeline makes the mistake structurally impossible — it re-fits on training folds only.</div></li>
+      <li><b>A too-good number is a bug report.</b><div class="why">ROC-AUC 0.997 from ten anonymous features should trigger an audit, not a celebration.</div></li>
+      <li><b>Never fit any transformer on test data.</b><div class="why">The original also fit its polynomial feature transformer on the test set — a second, independent leak.</div></li>
+      <li><b>Accuracy is meaningless at 5% prevalence.</b><div class="why">An always-negative model is 95% “accurate”. Use ROC/PR-AUC and report precision–recall at an explicit threshold — the slider above is that decision, made visible.</div></li>
+      <li><b>Negative results are results.</b><div class="why">Proving the dataset unlearnable — and showing exactly how the fake score arose — is the real deliverable.</div></li>
+    </ul>
+  </section>
+</main>
+
+<footer class="wrap">
+  <span>Safdar Hussain · model evaluation audit</span>
+  <a id="repoLink" href="https://github.com/safdar-hussain1/disease-prediction">github.com/safdar-hussain1/disease-prediction</a>
+</footer>
+
+<script>
+const DATA = {"honest":{"logistic_regression":0.44,"random_forest":0.401,"gradient_boosting":0.398,"xgboost":0.419},"leakyAuc":0.99,"bc":{"labels":[0,1,0,1,0,0,1,0,0,0,1,0,1,0,0,0,1,0,0,0,0,0,1,1,1,0,0,1,1,1,1,0,1,1,0,0,0,0,1,0,0,0,1,0,0,1,0,1,0,0,1,1,0,0,0,1,0,0,0,1,0,0,1,0,0,0,1,1,0,1,0,1,1,0,0,0,0,1,0,1,1,1,0,0,0,0,1,1,1,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,1,0,0,0,1,1],"probs":[0.0005,1.0,0.0536,0.68,0.645,0.001,0.8212,0.0014,0.0009,0.0141,0.9376,0.0001,1.0,0.0068,0.0099,0.0,0.0882,0.0006,0.275,0.0001,0.0022,0.0058,1.0,0.9988,0.8236,0.0003,0.0003,0.9817,0.9977,0.9998,1.0,0.0035,1.0,1.0,0.0005,0.0205,0.0033,0.0,0.9927,0.14,0.0001,0.0005,0.9064,0.0042,0.018,0.9697,0.102,0.9991,0.0001,0.0016,1.0,0.9989,0.0108,0.0015,0.0002,0.992,0.088,0.0,0.0008,1.0,0.0245,0.0968,0.9169,0.0,0.0305,0.0055,0.9998,0.9999,0.0226,0.9124,0.0002,1.0,0.9999,0.0002,0.0005,0.0619,0.0,0.9967,0.017,0.9806,0.9921,1.0,0.0001,0.0029,0.0,0.3049,1.0,0.2736,1.0,0.0002,1.0,0.0,0.121,0.0028,0.0182,0.0032,0.086,0.8978,0.0007,0.0001,0.0,0.001,0.0368,0.0145,0.0021,0.003,1.0,0.2836,1.0,0.0002,0.0006,0.1745,0.5633,0.9995]},"leakDemo":{"real":[[0.605,0.834],[0.732,0.269],[0.332,0.814],[0.084,0.77],[0.75,0.473],[0.335,0.314],[0.294,0.454],[0.504,0.545],[0.916,0.746],[0.603,0.911],[0.261,0.215],[0.595,0.117],[0.11,0.513],[0.472,0.85]],"synth":[[0.587,0.479],[0.3,0.432],[0.448,0.656],[0.816,0.665],[0.703,0.329],[0.401,0.832],[0.27,0.382],[0.587,0.591],[0.544,0.692],[0.601,0.759],[0.483,0.424],[0.507,0.38],[0.485,0.72],[0.425,0.511],[0.262,0.718],[0.393,0.427],[0.387,0.518],[0.54,0.829],[0.698,0.435],[0.637,0.309],[0.222,0.522],[0.513,0.244],[0.442,0.822],[0.783,0.486],[0.15,0.477],[0.287,0.812]]}};
+
+const css = getComputedStyle(document.documentElement);
+const C = n => css.getPropertyValue(n).trim();
+Chart.defaults.font.family = '"IBM Plex Mono",monospace';
+Chart.defaults.color = C('--ink-2');
+Chart.defaults.borderColor = C('--line');
+Chart.defaults.plugins.tooltip.backgroundColor = C('--ink');
+
+/* ---- Exhibit A: leak diagram ---- */
+function drawLeak(svgId, split){
+  const svg = document.getElementById(svgId);
+  const W=300, H=220, pad=14;
+  const px = v => pad + v*(W-2*pad), py = v => pad + v*(H-2*pad);
+  let s = '';
+  if(split){
+    s += `<line x1="${W*0.55}" y1="6" x2="${W*0.55}" y2="${H-6}" stroke="${C('--ink-3')}" stroke-width="2" stroke-dasharray="6 5"/>`;
+    s += `<text x="${W*0.55-8}" y="${H-10}" text-anchor="end" font-size="10" fill="${C('--ink-3')}" font-family="IBM Plex Mono">TRAIN</text>`;
+    s += `<text x="${W*0.55+8}" y="${H-10}" font-size="10" fill="${C('--ink-3')}" font-family="IBM Plex Mono">VALIDATION</text>`;
+  }
+  DATA.leakDemo.synth.forEach(p=>{
+    s += `<circle cx="${px(p[0])}" cy="${py(p[1])}" r="4.5" fill="#e9a4a3"/>`;
+  });
+  DATA.leakDemo.real.forEach(p=>{
+    s += `<circle cx="${px(p[0])}" cy="${py(p[1])}" r="5.5" fill="${C('--red')}"/>`;
+  });
+  if(split){
+    // highlight synthetic points near the boundary on the train side with rings
+    DATA.leakDemo.synth.filter(p=>p[0]<0.55 && p[0]>0.38).forEach(p=>{
+      s += `<circle cx="${px(p[0])}" cy="${py(p[1])}" r="8.5" fill="none" stroke="${C('--red')}" stroke-width="1.4" stroke-dasharray="3 2"/>`;
+    });
+  }
+  svg.innerHTML = s;
+}
+drawLeak('svgLeak1', false);
+drawLeak('svgLeak2', true);
+
+/* ---- Exhibit B: AUC comparison ---- */
+const honest = DATA.honest;
+const names = Object.keys(honest);
+new Chart(document.getElementById('cAuc'), {
+  type:'bar',
+  data:{labels:[...names.map(n=>n.replaceAll('_',' ')), 'random forest — LEAKY protocol'],
+    datasets:[{data:[...names.map(n=>honest[n]), DATA.leakyAuc],
+      backgroundColor:[...names.map(()=> '#2a78d6'), C('--red')],
+      borderRadius:{topRight:3, bottomRight:3}, barPercentage:.62}]},
+  options:{indexAxis:'y', maintainAspectRatio:false,
+    plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:i=>'ROC-AUC '+i.parsed.x.toFixed(3)+(i.dataIndex===names.length?' — fabricated by leakage':' — honest')}},
+      annotationLine:{}},
+    scales:{x:{min:0, max:1.05, border:{display:false}}, y:{grid:{display:false}}}},
+  plugins:[{
+    id:'chanceLine',
+    afterDatasetsDraw(chart){
+      const {ctx, chartArea, scales} = chart;
+      const x = scales.x.getPixelForValue(0.5);
+      ctx.save();
+      ctx.strokeStyle = C('--ink-3'); ctx.setLineDash([5,4]); ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(x, chartArea.top); ctx.lineTo(x, chartArea.bottom); ctx.stroke();
+      ctx.fillStyle = C('--ink-3'); ctx.font = '11px "IBM Plex Mono"';
+      ctx.fillText('chance 0.5', x+6, chartArea.top+12);
+      ctx.restore();
+    }
+  }]
+});
+
+/* ---- Exhibit C: threshold lab ---- */
+const labels = DATA.bc.labels, probs = DATA.bc.probs;
+// jittered strip plot: x = probability, y = class row with jitter
+function jitter(seed){ let s = seed; return ()=> (s = (s*9301+49297)%233280)/233280; }
+const rnd = jitter(7);
+const pts = probs.map((p,i)=>({x:p, y:(labels[i]? 1:0) + (rnd()-0.5)*0.55, cls:labels[i]}));
+
+const probChart = new Chart(document.getElementById('cProbs'), {
+  type:'scatter',
+  data:{datasets:[
+    {label:'actually benign', data:pts.filter(p=>!p.cls), backgroundColor:'rgba(42,120,214,.6)', pointRadius:3.5, pointHoverRadius:6},
+    {label:'actually malignant', data:pts.filter(p=>p.cls), backgroundColor:'rgba(194,49,47,.65)', pointRadius:3.5, pointHoverRadius:6},
+  ]},
+  options:{maintainAspectRatio:false,
+    plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:i=>`p(malignant) = ${i.parsed.x.toFixed(3)}`}}},
+    scales:{x:{min:0,max:1, title:{display:true,text:'predicted probability of malignancy'}, border:{display:false}},
+            y:{min:-0.5,max:1.5, ticks:{callback:v=>v===0?'benign':v===1?'malignant':'', stepSize:1}, grid:{display:false}, border:{display:false}}}},
+  plugins:[{
+    id:'thrLine',
+    afterDatasetsDraw(chart){
+      const t = parseFloat(document.getElementById('thr').value);
+      const {ctx, chartArea, scales} = chart;
+      const x = scales.x.getPixelForValue(t);
+      ctx.save();
+      ctx.strokeStyle = C('--ink'); ctx.lineWidth = 2; ctx.setLineDash([2,3]);
+      ctx.beginPath(); ctx.moveTo(x, chartArea.top); ctx.lineTo(x, chartArea.bottom); ctx.stroke();
+      ctx.restore();
+    }
+  }]
+});
+
+const cellStyles = {
+  good:{bg:'#e3f0fd', fg:'#0d366b'},
+  bad:{bg:'#f9e3e2', fg:'#a02422'},
+};
+function setCell(id, val, kind, label){
+  const el = document.getElementById(id);
+  el.style.background = cellStyles[kind].bg;
+  el.style.color = cellStyles[kind].fg;
+  el.innerHTML = `${val}<small>${label}</small>`;
+}
+function updateLab(){
+  const t = parseFloat(document.getElementById('thr').value);
+  document.getElementById('throut').textContent = t.toFixed(2);
+  let tp=0, fp=0, tn=0, fn=0;
+  probs.forEach((p,i)=>{
+    const pred = p>=t ? 1:0;
+    if(pred&&labels[i]) tp++; else if(pred&&!labels[i]) fp++;
+    else if(!pred&&!labels[i]) tn++; else fn++;
+  });
+  setCell('tn', tn, 'good', 'correct all-clear');
+  setCell('fp', fp, 'bad', 'false alarms');
+  setCell('fn', fn, 'bad', 'missed cancers');
+  setCell('tp', tp, 'good', 'caught');
+  const prec = tp+fp ? tp/(tp+fp) : 0, rec = tp+fn ? tp/(tp+fn) : 0;
+  const f1 = prec+rec ? 2*prec*rec/(prec+rec) : 0;
+  document.getElementById('sPrec').textContent = (prec*100).toFixed(1)+'%';
+  document.getElementById('sRec').textContent = (rec*100).toFixed(1)+'%';
+  document.getElementById('sF1').textContent = f1.toFixed(3);
+  probChart.update('none');
+}
+document.getElementById('thr').addEventListener('input', updateLab);
+updateLab();
+</script>
+</body>
+</html>
