@@ -32,6 +32,51 @@ Full narrative with figures: [`notebooks/disease_prediction_analysis.ipynb`](not
 - **Fail-fast data validation** — schema, missingness, and label checks before any training.
 - **Tested** — `pytest` suite covers validation logic, threshold tuning, and an end-to-end check that each candidate learns a planted signal without leaking.
 
+## Results
+
+### Course dataset (honest protocol)
+
+Grid-searched with stratified 5-fold CV on the 80% training split; scored on the untouched 20% validation split (800 patients, 39 positive):
+
+| Model | CV ROC-AUC | Validation ROC-AUC | Validation PR-AUC |
+|---|---|---|---|
+| Logistic Regression (`C=0.01`, balanced) | 0.514 | 0.440 | 0.044 |
+| Random Forest (400 trees + SMOTE) | 0.541 | 0.401 | 0.039 |
+| Gradient Boosting (+ SMOTE) | 0.529 | 0.398 | 0.039 |
+| XGBoost (`scale_pos_weight=19`) | 0.513 | 0.419 | 0.043 |
+| *Random Forest, leaky protocol (reproduction)* | — | *0.990* | — |
+
+Chance ROC-AUC is 0.5 and chance PR-AUC equals the 4.9% base rate — every honest model sits at chance. **Inference: the anonymized features contain no learnable signal**, so the fitted model's test predictions (`reports/test_predictions.csv`, per-patient probability + thresholded label) are provably no better than predicting the base rate — the file exists to demonstrate the inference path, not clinical value. The threshold tuner degenerates to flagging nearly everyone (recall 1.0, precision ≈ 0.05), which is exactly what maximising F1 on noise looks like.
+
+### Wisconsin breast cancer (same pipeline, real signal)
+
+Held-out validation split, 114 tumours (42 malignant):
+
+| Metric | Value |
+|---|---|
+| ROC-AUC | **0.995** |
+| PR-AUC | 0.993 |
+| Precision / Recall / F1 @ 0.5 | 0.976 / 0.952 / 0.964 |
+| Confusion matrix | TN 71 · FP 1 · FN 2 · TP 40 |
+
+## Using the trained model
+
+`python -m disease_prediction.train` writes `models/final_model.joblib` — a dict with the fitted pipeline and tuned threshold. Score any CSV with the same schema (`feature_1…feature_10`, `patient_id`):
+
+```python
+import joblib, pandas as pd
+
+# Load the bundle this repo's own train step produced (only unpickle files you trust).
+bundle = joblib.load("models/final_model.joblib")
+model, threshold = bundle["model"], bundle["threshold"]
+
+df = pd.read_csv("data/disease_test.csv")
+probs = model.predict_proba(df[[f"feature_{i}" for i in range(1, 11)]])[:, 1]
+labels = (probs >= threshold).astype(int)
+```
+
+Or simply `python -m disease_prediction.predict`, which validates the schema first and writes `reports/test_predictions.csv` with `patient_id, probability, prediction`.
+
 ## Repository structure
 
 ```
