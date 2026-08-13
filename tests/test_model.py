@@ -27,6 +27,14 @@ number and would fail loudly if anyone reintroduced in-sample scoring;
 test_cross_fit_calibration_excludes_each_rows_own_fold proves it at the
 index level (every row's p_cal comes from a calibrator fit on rows
 excluding it), not just via the aggregate ECE gap.
+
+Also covers TrainResult.calibrator (the DEPLOYMENT calibrator, distinct
+from oof["p_cal"] above): a reviewer applied the brief's named mutation --
+fit final_model first, then build the calibrator from
+final_model.predict_proba(X_all_enc)[:, 1] instead of pooled OOF p_raw --
+and found every test in this file still passed, because none of them
+asserted the calibrator's fitted VALUES, only its shape/behaviour.
+test_deployment_calibrator_matches_independent_oof_refit closes that gap.
 """
 
 import numpy as np
@@ -35,7 +43,7 @@ import pytest
 import xgboost as xgb
 from sklearn.metrics import roc_auc_score
 
-from nightingale.calibrate import ece, fit_calibrator
+from nightingale.calibrate import ece, fit_calibrator, pick_calibration
 from nightingale.clean import CLEANED_ROOT
 from nightingale.sentinel import LeakageError
 import nightingale.model as model_module
@@ -415,3 +423,52 @@ def test_cross_fit_calibration_excludes_each_rows_own_fold(monkeypatch):
     assert all_scored == set(range(n))  # every row scored exactly once, by some fold
     assert p_cal.shape == (n,)
     assert not np.any(np.isnan(p_cal))
+
+
+# ---------------------------------------------------------------------------
+# Deployment calibrator value-level regression (Fix round 2)
+# ---------------------------------------------------------------------------
+#
+# Fix round 1 (above) secured oof["p_cal"] against in-sample scoring. But
+# TrainResult.calibrator -- the separate DEPLOYMENT artifact Task 10 will
+# export to score real users' inputs in the browser -- was, until this
+# fix, protected by nothing but an implicit ordering accident (the
+# calibrator happened to be built before final_model was fit). A reviewer
+# proved this by applying the brief's literal named mutation -- fit
+# final_model first, then construct the calibrator from
+# final_model.predict_proba(X_all_enc)[:, 1] instead of pooled OOF p_raw --
+# and running the whole file: 15/15 passed. Nothing before this test
+# compared the calibrator's actual fitted numbers to anything.
+
+
+def test_deployment_calibrator_matches_independent_oof_refit():
+    """TrainResult.calibrator's exported params must match an OOF-only refit.
+
+    Independently reconstructs a calibrator via pick_calibration from
+    ONLY result.oof["y_true"]/result.oof["p_raw"] (the pooled OOF), and
+    asserts its export() matches result.calibrator.export() value-for-value
+    (exact "type", tight numeric tolerance on the fitted parameters).
+    pick_calibration's underlying fits (LogisticRegression via lbfgs,
+    IsotonicRegression's pool-adjacent-violators) are both deterministic
+    given identical input, so a correct implementation reproduces this
+    exactly; a calibrator built from any other prediction source (most
+    notably final_model's own in-sample predict_proba, the mutation this
+    test exists to catch) will not.
+    """
+    result = train_condition("breast-cancer", seed=42)
+
+    independent = pick_calibration(
+        result.oof["y_true"].to_numpy(), result.oof["p_raw"].to_numpy()
+    )
+
+    actual = result.calibrator.export()
+    expected = independent.export()
+
+    assert actual["type"] == expected["type"]
+    if actual["type"] == "sigmoid":
+        assert actual["a"] == pytest.approx(expected["a"], abs=1e-9)
+        assert actual["b"] == pytest.approx(expected["b"], abs=1e-9)
+    else:
+        assert actual["type"] == "isotonic"
+        np.testing.assert_allclose(actual["x"], expected["x"], atol=1e-9)
+        np.testing.assert_allclose(actual["y"], expected["y"], atol=1e-9)

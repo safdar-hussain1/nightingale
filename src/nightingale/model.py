@@ -35,12 +35,18 @@ Protocol, exactly:
   params across the 5 outer folds (:func:`_most_frequent_params` documents
   the tie-break rule).
 - ``TrainResult.calibrator`` is fit once, on the pooled OOF ``p_raw`` --
-  never on ``final_model``'s own in-sample training predictions (that
-  substitution is exactly the leak
-  :func:`nightingale.sentinel.assert_calibrator_held_out` exists to catch).
-  This is the DEPLOYMENT calibrator: the artifact Task 10 exports for
-  scoring genuinely new rows, where "fit on all the OOF signal we have" is
-  correct and desirable.
+  never on ``final_model``'s own in-sample training predictions.
+  :func:`_fit_deployment_calibrator` takes the OOF frame itself (not bare
+  ``y``/``p_raw`` arrays) specifically so that substitution can't be made
+  by quietly swapping one argument at the call site -- a reviewer
+  confirmed exactly that swap (fit ``final_model`` first, then calibrate
+  on its own ``predict_proba``) went undetected by every other test in
+  this suite, because none of them asserted the calibrator's fitted
+  VALUES;
+  ``tests/test_model.py::test_deployment_calibrator_matches_independent_oof_refit``
+  now does. This is the DEPLOYMENT calibrator: the artifact Task 10
+  exports for scoring genuinely new rows, where "fit on all the OOF signal
+  we have" is correct and desirable.
 - ``oof["p_cal"]``, by contrast, is produced by CROSS-FITTED calibration
   (:func:`_cross_fit_calibration`): for each outer fold k, a fresh
   calibrator is fit on every OOF row NOT in fold k and applied only to fold
@@ -318,6 +324,30 @@ def _cross_fit_calibration(oof: pd.DataFrame, method: str) -> np.ndarray:
     return p_cal
 
 
+def _fit_deployment_calibrator(oof: pd.DataFrame) -> Calibrator:
+    """Fit the calibrator ``TrainResult.calibrator`` exports for scoring new rows.
+
+    Takes the pooled OOF frame -- and nothing else -- on purpose. This is
+    the ONLY out-of-fold signal this module has about the base model's
+    calibration quality, and the deployment calibrator MUST be fit from
+    ``oof["p_raw"]``/``oof["y_true"]``, never from ``final_model``'s own
+    (in-sample) training predictions: that substitution is precisely the
+    leak this function's signature is built to make hard to commit by
+    accident. A bare ``pick_calibration(y, p_raw)`` call at the
+    ``train_condition`` call site could have ``p_raw`` swapped for
+    ``final_model.predict_proba(X_all_enc)[:, 1]`` in a quiet one-line
+    edit -- confirmed by a reviewer, who made exactly that edit and found
+    the rest of the test suite (correctly) noticed nothing, because nothing
+    before that check asserted the calibrator's actual fitted VALUES.
+    Requiring the OOF DataFrame itself means reproducing that mutation
+    needs a visibly fabricated stand-in DataFrame, not a one-token swap --
+    and test_model.py's
+    test_deployment_calibrator_matches_independent_oof_refit asserts the
+    exported values directly, so even that visible fabrication is caught.
+    """
+    return pick_calibration(oof["y_true"].to_numpy(), oof["p_raw"].to_numpy())
+
+
 def train_condition(slug: str, seed: int = 42) -> TrainResult:
     """Nested-CV training with held-out calibration for one condition.
 
@@ -395,7 +425,10 @@ def train_condition(slug: str, seed: int = 42) -> TrainResult:
     # final_model's own (in-sample, below) training predictions. This is
     # the artifact TrainResult.calibrator exports for scoring genuinely new
     # rows (Task 10); it is NOT what oof["p_cal"] is computed from below.
-    calibrator = pick_calibration(oof["y_true"].to_numpy(), oof["p_raw"].to_numpy())
+    # _fit_deployment_calibrator's signature (takes `oof`, not bare arrays)
+    # is deliberately shaped so this line can't be quietly rewired to
+    # final_model's in-sample predictions -- see its docstring.
+    calibrator = _fit_deployment_calibrator(oof)
     chosen_calibration_method = calibrator.export()["type"]
 
     # oof["p_cal"]: cross-fitted, out-of-sample calibration -- see
