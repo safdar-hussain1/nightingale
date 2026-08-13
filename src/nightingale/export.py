@@ -414,7 +414,26 @@ def predict(model: dict, x) -> dict:
     :func:`nightingale.conformal.prediction_set`, reused rather than
     reimplemented so the exported artifact and the published metrics can
     never disagree about what "uncertain" means.
+
+    **Deliberate asymmetry with walker.js.** This function RAISES on a row
+    of the wrong length, and lets a non-numeric value raise from
+    ``numpy.float32``. walker.js instead coerces anything unusable (``""``,
+    ``"abc"``, ``Infinity``) to NaN and routes it as missing. That is not
+    an inconsistency, it is the two call sites having different jobs: this
+    walker runs inside a pipeline, where a malformed row means a bug
+    upstream and silently guessing would hide it; walker.js runs behind a
+    form, where a blank field is a normal thing for a person to do and
+    refusing to score would be useless. Neither ever invents a value --
+    JavaScript's ``Number('') === 0`` is precisely what walker.js's
+    ``toFeatureValue`` exists to stop. Structural damage (wrong row length)
+    throws on both sides.
     """
+    expected = len(model["features"])
+    if len(x) != expected:
+        raise ValueError(
+            f"predict: expected {expected} feature values, got {len(x)} -- a row of "
+            f"the wrong length would read every feature from the wrong column"
+        )
     total = model["base_score"]
     for tree in model["trees"]:
         total += _walk_tree(tree, x)

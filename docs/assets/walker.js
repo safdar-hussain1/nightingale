@@ -48,6 +48,69 @@ function isMissing(value) {
   return value === null || value === undefined || (typeof value === 'number' && isNaN(value));
 }
 
+// Coerce one incoming feature value, turning anything unusable into NaN so
+// it routes down the missing branch.
+//
+// This exists because of one specific, dangerous JavaScript behaviour:
+// Number('') === 0. An HTML form field the user left blank arrives as the
+// empty string, and without this guard it would silently become the
+// clinical value ZERO -- an in-range, plausible number for cholesterol,
+// blood pressure or blood glucose -- rather than "not measured". The model
+// would then answer confidently about a patient whose chart says 0 mg/dL.
+// Number(' ') and Number([]) are 0 too, and Number(null) is 0.
+//
+// Deliberate asymmetry with the Python reference walker: Python's
+// `predict` RAISES on a malformed row, because it sits in a pipeline where
+// a wrong-length or non-numeric row means a bug upstream and guessing
+// would hide it. This walker instead treats unfillable input as missing,
+// because it sits behind a form where a blank field is a normal thing for
+// a person to do. Both refuse to invent a value; they differ only in
+// whether "I cannot use this" is an error or a blank. Structural problems
+// (wrong row length) still throw on BOTH sides -- see coerceRow.
+function toFeatureValue(value) {
+  if (value === null || value === undefined) {
+    return NaN;
+  }
+  if (typeof value === 'number') {
+    return isFinite(value) ? value : NaN; // NaN, Infinity, -Infinity -> missing
+  }
+  if (typeof value === 'boolean') {
+    return value ? 1 : 0; // a checkbox is a legitimate 0/1 feature input
+  }
+  if (typeof value === 'string') {
+    if (value.trim() === '') {
+      return NaN; // the blank form field -- NOT zero
+    }
+    var parsed = Number(value);
+    return isFinite(parsed) ? parsed : NaN; // 'abc', '12px', 'NaN' -> missing
+  }
+  return NaN; // objects, arrays, symbols: nothing a feature value can be
+}
+
+// Coerce a whole row, refusing structurally wrong input outright.
+//
+// A row of the wrong length is not a blank field, it is a caller bug: every
+// subsequent feature index would read the wrong column, and the model would
+// return a confident answer about the wrong patient. That throws here, as
+// it does in Python.
+function coerceRow(model, x) {
+  var expected = model.features.length;
+  if (!Array.isArray(x)) {
+    throw new Error('predict: expected an array of ' + expected + ' feature values');
+  }
+  if (x.length !== expected) {
+    throw new Error(
+      'predict: expected ' + expected + ' feature values, got ' + x.length +
+      ' -- a row of the wrong length would read every feature from the wrong column'
+    );
+  }
+  var row = new Array(expected);
+  for (var i = 0; i < expected; i++) {
+    row[i] = toFeatureValue(x[i]);
+  }
+  return row;
+}
+
 // The leaf value one flat tree assigns to x. Nodes reference each other by
 // POSITION in the array, never by any id carried over from XGBoost's dump.
 function walkTree(nodes, x) {
@@ -138,10 +201,15 @@ function predictionSet(p, qHat) {
 }
 
 // Score one row: { p_raw, p_cal, set }.
+//
+// `x` is coerced once up front (see toFeatureValue / coerceRow) rather than
+// per node, so a blank or unparseable form field becomes "not measured"
+// exactly once and every tree then sees the same value.
 function predict(model, x) {
+  var row = coerceRow(model, x);
   var total = model.base_score;
   for (var i = 0; i < model.trees.length; i++) {
-    total += walkTree(model.trees[i], x);
+    total += walkTree(model.trees[i], row);
   }
   var pRaw = sigmoid(total);
   var pCal = applyCalibrator(model.calibrator, pRaw);
@@ -176,6 +244,8 @@ if (typeof module !== 'undefined' && module.exports) {
     applyCalibrator: applyCalibrator,
     predictionSet: predictionSet,
     sigmoid: sigmoid,
+    toFeatureValue: toFeatureValue,
+    coerceRow: coerceRow,
     checkCanaries: checkCanaries
   };
 }

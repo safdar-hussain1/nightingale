@@ -66,6 +66,13 @@ FAST_SLUG = "breast-cancer"
 
 ALL_SLUGS = sorted(CONDITIONS)
 
+# Rows scored per condition in the predict_proba gate. Every condition but
+# diabetes is smaller than this and is checked in full; diabetes's 253,680
+# rows are sampled down, which reduces how many rows are checked and not how
+# tightly any of them is.
+REAL_ROW_SAMPLE = 2_000
+REAL_ROW_SEED = 202
+
 
 # --------------------------------------------------------------------------
 # helpers
@@ -665,16 +672,38 @@ def test_export_is_deterministic_and_matches_the_committed_bundle(tmp_path):
     assert fresh == stored
 
 
-def test_exported_walker_matches_predict_proba_on_real_data():
-    """The shipped bundle scores real rows the way XGBoost does."""
-    result = train_result(FAST_SLUG)
-    encoded = encoded_frame(FAST_SLUG)
-    model = committed_model(FAST_SLUG)
+@pytest.mark.parametrize("slug", ALL_SLUGS)
+def test_exported_walker_matches_predict_proba_on_real_data(slug):
+    """Every shipped bundle scores real rows the way XGBoost does.
 
-    rows = encoded.head(100)
+    All six conditions, not just the fast one: this is the gate that says
+    the exported trees ARE the trained model, and a gate that only covers
+    one of six conditions is not a gate. Real cleaned rows specifically --
+    they are the ones that sit exactly on ``hist`` split points, so this
+    also exercises the float32 comparison on every condition.
+
+    Runtime: each condition has to be refit, because Task 8 persisted
+    metrics and OOF predictions but no fitted estimator. ``train_result``
+    memoises per process, and diabetes (~5 min to fit, 253,680 rows) is
+    scored on a seeded 2,000-row sample rather than the whole frame --
+    sampling only reduces how many rows are checked, never how tightly.
+    """
+    result = train_result(slug)
+    encoded = encoded_frame(slug)
+    model = committed_model(slug)
+
+    if len(encoded) > REAL_ROW_SAMPLE:
+        chosen = np.random.default_rng(REAL_ROW_SEED).choice(
+            len(encoded), size=REAL_ROW_SAMPLE, replace=False
+        )
+        rows = encoded.iloc[np.sort(chosen)]
+    else:
+        rows = encoded
+
     theirs = result.final_model.predict_proba(rows)[:, 1].astype(float)
     ours = np.array([predict(model, row)["p_raw"] for row in rows.to_numpy(dtype=float).tolist()])
-    assert np.max(np.abs(ours - theirs)) <= XGB_NATIVE_TOLERANCE
+    worst = float(np.max(np.abs(ours - theirs)))
+    assert worst <= XGB_NATIVE_TOLERANCE, f"{slug}: max abs diff {worst:g} over {len(rows)} rows"
 
 
 def test_exported_calibrator_and_verdict_match_the_python_pipeline():
@@ -694,6 +723,23 @@ def test_exported_calibrator_and_verdict_match_the_python_pipeline():
 
     for walk, p in zip(walked, expected_cal):
         assert walk["set"] == prediction_set(float(p), q_hat)
+
+
+def test_python_predict_refuses_a_wrong_length_row():
+    """Python's job is pipeline strictness: a malformed row is a bug, not a blank.
+
+    walker.js deliberately differs on *unfillable values* (``""``/``"abc"``
+    route as missing, because a person left a form field blank), but agrees
+    on *structural* damage: a row of the wrong length reads every feature
+    from the wrong column, so both sides refuse it. The JS half is asserted
+    in ``tests/test_parity.py::test_js_rejects_a_wrong_length_row``.
+    """
+    model = committed_model("heart-disease")
+    n = len(model["features"])
+    with pytest.raises(ValueError, match=f"expected {n} feature values"):
+        predict(model, [1.0, 2.0, 3.0])
+    with pytest.raises(ValueError, match=f"expected {n} feature values"):
+        predict(model, [0.0] * (n + 1))
 
 
 def test_export_refuses_a_feature_order_mismatch(monkeypatch, tmp_path):
