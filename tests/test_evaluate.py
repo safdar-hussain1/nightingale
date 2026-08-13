@@ -20,6 +20,7 @@ import pandas as pd
 import pytest
 from sklearn.metrics import roc_auc_score
 
+import nightingale.evaluate as evaluate_module
 from nightingale.evaluate import evaluate_oof, metric_ci, net_benefit, subgroup_audit
 from nightingale.model import train_condition
 
@@ -127,6 +128,45 @@ def test_net_benefit_treat_none_zero_and_treat_all_matches_closed_form():
 
 
 # ---------------------------------------------------------------------------
+# net_benefit: threshold-domain guard (fix round 1, finding 1)
+# ---------------------------------------------------------------------------
+
+
+def test_net_benefit_rejects_thresholds_outside_open_unit_interval():
+    # np.linspace(0, 1, 11) is the obvious way to build a DCA grid, and it
+    # always includes both endpoints -- pt=1.0 makes pt/(1-pt) a division
+    # by zero (model=NaN, treat_all=-inf on that row); pt=0.0 is likewise
+    # outside the open interval (0, 1) the function's contract requires.
+    y = [1, 0, 1, 0]
+    p = [0.9, 0.1, 0.6, 0.4]
+
+    with pytest.raises(ValueError, match=r"\(0, 1\)"):
+        net_benefit(y, p, np.linspace(0.0, 1.0, 11))
+
+
+def test_net_benefit_rejects_threshold_above_one():
+    y = [1, 0, 1, 0]
+    p = [0.9, 0.1, 0.6, 0.4]
+
+    with pytest.raises(ValueError, match=r"1\.5"):
+        net_benefit(y, p, [0.2, 1.5])
+
+
+def test_net_benefit_valid_grid_never_produces_nan_or_inf():
+    rng = np.random.default_rng(3)
+    n = 200
+    y = (rng.uniform(size=n) < 0.4).astype(int)
+    p = rng.uniform(0.0, 1.0, n)
+    # Deliberately close to, but strictly inside, the open interval.
+    thresholds = np.linspace(0.01, 0.99, 25)
+
+    result = net_benefit(y, p, thresholds)
+
+    values = result[["threshold", "model", "treat_all", "treat_none"]].to_numpy()
+    assert np.isfinite(values).all()
+
+
+# ---------------------------------------------------------------------------
 # subgroup_audit
 # ---------------------------------------------------------------------------
 
@@ -167,6 +207,20 @@ def test_subgroup_audit_sufficient_group_gets_real_bounded_auc():
     assert a_row["auc_lo"] <= a_row["auc"] <= a_row["auc_hi"]
 
 
+def test_subgroup_audit_raises_on_misaligned_groups():
+    # Only 100 of 140 oof rows have a matching groups entry. Without an
+    # explicit precondition check, reindex(oof.index) would silently turn
+    # the other 40 into a NaN "group" that groupby(dropna=False) treats as
+    # ordinary -- a spurious 40-row bucket clears min_n=40 and would
+    # otherwise report a real-looking, "sufficient" numeric AUC for rows
+    # that were never actually assigned a group.
+    oof = _synthetic_oof(140, seed=0)
+    groups = pd.Series(["A"] * 100, index=oof.index[:100])
+
+    with pytest.raises(ValueError, match=r"40"):
+        subgroup_audit(oof, groups, min_n=40)
+
+
 # ---------------------------------------------------------------------------
 # evaluate_oof: real trained condition (breast-cancer)
 # ---------------------------------------------------------------------------
@@ -192,3 +246,28 @@ def test_evaluate_oof_breast_cancer_real_condition():
     assert sum(b["n"] for b in reliability) == n
     for b in reliability:
         assert set(b) == {"bin_lo", "bin_hi", "n", "mean_pred", "frac_pos"}
+
+
+# ---------------------------------------------------------------------------
+# evaluate_oof: distinct per-metric bootstrap seed (fix round 1, finding 3)
+# ---------------------------------------------------------------------------
+
+
+def test_evaluate_oof_uses_a_distinct_bootstrap_seed_per_metric(monkeypatch):
+    seen_seeds = []
+    real_metric_ci = evaluate_module.metric_ci
+
+    def spy_metric_ci(y, p, metric_fn, n_boot=2000, seed=0):
+        seen_seeds.append(seed)
+        return real_metric_ci(y, p, metric_fn, n_boot=n_boot, seed=seed)
+
+    monkeypatch.setattr(evaluate_module, "metric_ci", spy_metric_ci)
+
+    oof = _synthetic_oof(200, seed=0)
+    evaluate_module.evaluate_oof(oof, n_boot=50, seed=7)
+
+    # Four metrics (roc_auc, pr_auc, brier, ece) -> four metric_ci calls,
+    # each with a DIFFERENT seed -- sharing one seed across all four would
+    # make every metric resample byte-identical bootstrap indices.
+    assert len(seen_seeds) == 4
+    assert len(set(seen_seeds)) == 4

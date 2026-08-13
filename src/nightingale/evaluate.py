@@ -127,17 +127,37 @@ def evaluate_oof(oof: pd.DataFrame, n_boot: int = 2000, seed: int = 0) -> dict:
     ``ece`` (each a ``[point, lo, hi]`` list), ``reliability`` (list of bin
     dicts, see :func:`_reliability_bins`), and ``n``/``n_positive``/
     ``prevalence``.
+
+    The four bootstrap CIs are drawn with DISTINCT per-metric seeds --
+    ``seed + k`` for the k-th metric, in the fixed order roc_auc(0),
+    pr_auc(1), brier(2), ece(3) -- rather than all four sharing the single
+    ``seed`` passed in. Reusing one seed across all four would make every
+    metric's ``n_boot`` bootstrap replicates resample the EXACT SAME
+    indices in the EXACT SAME order (:func:`metric_ci`'s RNG stream is a
+    pure function of ``seed`` and the class sizes, both identical across
+    the four calls here), correlating the four reported intervals in a way
+    that has nothing to do with the metrics' actual joint sampling
+    distribution and is never documented or intended. Each metric's own CI
+    remains fully deterministic for a given ``seed``.
     """
     y = oof["y_true"].to_numpy()
     p = oof["p_cal"].to_numpy()
     n = len(oof)
     n_positive = int(y.sum())
 
+    metric_fns = [
+        ("roc_auc", roc_auc_score),
+        ("pr_auc", average_precision_score),
+        ("brier", brier_score_loss),
+        ("ece", ece),
+    ]
+    metrics = {
+        name: list(metric_ci(y, p, fn, n_boot=n_boot, seed=seed + k))
+        for k, (name, fn) in enumerate(metric_fns)
+    }
+
     return {
-        "roc_auc": list(metric_ci(y, p, roc_auc_score, n_boot=n_boot, seed=seed)),
-        "pr_auc": list(metric_ci(y, p, average_precision_score, n_boot=n_boot, seed=seed)),
-        "brier": list(metric_ci(y, p, brier_score_loss, n_boot=n_boot, seed=seed)),
-        "ece": list(metric_ci(y, p, ece, n_boot=n_boot, seed=seed)),
+        **metrics,
         "reliability": _reliability_bins(y, p),
         "n": n,
         "n_positive": n_positive,
@@ -156,16 +176,29 @@ def net_benefit(y, p, thresholds: np.ndarray) -> pd.DataFrame:
         NB_treat_none    = 0   (nobody is treated -- no TP, no FP, by definition)
 
     ``pt`` must be strictly inside ``(0, 1)``: ``pt / (1 - pt)`` is
-    undefined at ``pt == 1`` (and ``pt == 0`` makes "predicted positive"
-    trivially everyone, which is a degenerate but not undefined case).
+    undefined (division by zero) at ``pt == 1``, and every value outside
+    the open interval is rejected -- ``ValueError`` -- rather than left to
+    silently produce ``NaN``/``inf`` (``np.linspace(0, 1, N)``, the obvious
+    way to build a DCA grid, always includes both endpoints; these values
+    get JSON-serialized onto the published dashboard, where a NaN/Infinity
+    token is a hard downstream parse failure, not a harmless edge case).
     """
     y = np.asarray(y)
     p = np.asarray(p, dtype=float)
     n = len(y)
     prevalence = float(y.sum()) / n
 
+    thresholds_arr = np.asarray(thresholds, dtype=float)
+    invalid = thresholds_arr[(thresholds_arr <= 0.0) | (thresholds_arr >= 1.0)]
+    if invalid.size > 0:
+        bad = sorted(set(invalid.tolist()))
+        raise ValueError(
+            f"net_benefit thresholds must lie strictly inside the open interval "
+            f"(0, 1); got invalid value(s) {bad}"
+        )
+
     rows = []
-    for pt in np.asarray(thresholds, dtype=float):
+    for pt in thresholds_arr:
         predicted_positive = p >= pt
         tp = int(np.sum(predicted_positive & (y == 1)))
         fp = int(np.sum(predicted_positive & (y == 0)))
@@ -200,9 +233,30 @@ def subgroup_audit(
     the-large -- rather than a binned ECE: subgroup sizes can sit close to
     ``min_n``, where 10 ECE bins would mostly be near-empty and noisy; a
     single signed gap is the more honest number at that scale.
+
+    ``groups`` MUST cover every row of ``oof`` -- checked explicitly and
+    raises ``ValueError`` otherwise. Without this check,
+    ``pd.Series(groups).reindex(oof.index)`` on a partial/misaligned
+    ``groups`` would silently manufacture a NaN "group" out of every
+    unmatched row, and ``groupby(dropna=False)`` below would then treat
+    that NaN bucket as an ordinary group -- capable, if it happens to clear
+    ``min_n``, of reporting a real-looking, "sufficient" numeric AUC for
+    what is actually a meaningless collection of misaligned rows. That is
+    exactly the "looks precise and isn't" failure this function exists to
+    prevent, so a silent partial alignment is treated as a caller error,
+    not tolerated data.
     """
+    groups = pd.Series(groups)
+    missing = oof.index.difference(groups.index)
+    if len(missing) > 0:
+        raise ValueError(
+            f"subgroup_audit: groups is missing {len(missing)} of {len(oof)} "
+            f"oof row(s) -- groups must be index-aligned to oof (every oof "
+            f"row needs a corresponding groups entry)"
+        )
+
     df = oof.copy()
-    df["_group"] = pd.Series(groups).reindex(df.index)
+    df["_group"] = groups.reindex(df.index)
 
     rows = []
     for group_value, sub in df.groupby("_group", dropna=False):
