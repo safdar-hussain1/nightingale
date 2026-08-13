@@ -3,14 +3,19 @@
 # SPDX-License-Identifier: MIT
 """Tests for the six per-condition data cleaners (nightingale.clean).
 
-Uses the real, already-fetched raw data under data/raw/ (populated by Task 2's
-`fetch`). No test here is network-marked: `clean()` calls `fetch()`, but since
-the cache is already populated `fetch()` only verifies checksums locally.
+Most tests here read the already-committed `data/cleaned/<slug>.csv.gz`
+artifacts directly (see the `cleaned_frames` fixture) rather than calling
+`clean()` -- those files are checked into the repo, so this keeps the bulk
+of the suite raw-data-free and green on a fresh clone with no `data/raw/`.
 
-`clean()` is run once per condition for the whole test session (see the
-`cleaned_frames` fixture) and every quirk/contract test reads back the actual
-written `data/cleaned/<slug>.csv.gz` artifact, not an in-memory object, so the
-tests exercise the real on-disk contract every downstream task depends on.
+A couple of tests genuinely need to exercise `clean()` (and therefore
+`fetch()`) end-to-end against the real, already-fetched raw data under
+`data/raw/` (gitignored, populated by running `fetch`, not by cloning the
+repo). No test here is network-marked -- if the raw cache is populated,
+`fetch()` only verifies checksums locally -- but on a fresh clone the cache
+is absent, so those tests call `conftest.skip_if_raw_missing` first and
+skip with an actionable reason instead of failing or reaching for the
+network.
 """
 
 import struct
@@ -19,7 +24,15 @@ import pandas as pd
 import pytest
 
 import nightingale.clean as clean_module
-from nightingale.clean import PIPELINES, CleaningError, _apply_heart_sentinels, _validate, clean
+from conftest import skip_if_raw_missing
+from nightingale.clean import (
+    CLEANED_ROOT,
+    PIPELINES,
+    CleaningError,
+    _apply_heart_sentinels,
+    _validate,
+    clean,
+)
 from nightingale.conditions import CONDITIONS
 
 ALL_SLUGS = sorted(CONDITIONS.keys())
@@ -27,9 +40,11 @@ ALL_SLUGS = sorted(CONDITIONS.keys())
 
 @pytest.fixture(scope="session")
 def cleaned_frames():
+    # Reads the committed artifact directly (not clean()) so every test
+    # using this fixture is raw-data-free and runs on a fresh clone.
     frames = {}
     for slug in ALL_SLUGS:
-        path = clean(slug)
+        path = CLEANED_ROOT / f"{slug}.csv.gz"
         frames[slug] = pd.read_csv(path, compression="gzip")
     return frames
 
@@ -240,6 +255,10 @@ def test_validate_raises_cleaning_error_for_all_nan_column():
 
 
 def test_clean_raises_cleaning_error_when_pipeline_produces_bad_shape(monkeypatch):
+    # clean() calls fetch() before it ever reaches the (monkeypatched)
+    # pipeline, so this genuinely needs breast-cancer's raw data cached.
+    skip_if_raw_missing("breast-cancer")
+
     def bad_pipeline(raw_dir):
         return pd.DataFrame({"target": [0, 1]})
 
@@ -254,6 +273,10 @@ def test_clean_raises_cleaning_error_when_pipeline_produces_bad_shape(monkeypatc
 
 
 def test_cleaned_output_is_byte_reproducible(tmp_path, monkeypatch):
+    # This is the one test that genuinely exercises clean() (and therefore
+    # fetch()) end-to-end -- it needs breast-cancer's raw data cached.
+    skip_if_raw_missing("breast-cancer")
+
     # gzip embeds a Unix mtime in its header by default, which makes two
     # writes of the identical DataFrame produce two different files. Task
     # 11's Ed25519 provenance manifest needs `clean()`'s output to be

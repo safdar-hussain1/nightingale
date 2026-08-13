@@ -12,13 +12,21 @@ scan_sentinel_zeros flags `chol` on the raw Switzerland heart-disease file —
 the wild example that motivated writing this detector in the first place —
 and that the cleaner's sentinel-to-NaN conversion (Task 3) makes the flag go
 away, i.e. the cleaner and the detector agree.
+
+The raw-file test needs data/raw/ (gitignored, populated by `fetch`, not by
+cloning the repo) and is skipped with an actionable reason when it's absent
+-- see conftest.skip_if_raw_missing. The cleaned-data test reads the
+committed data/cleaned/heart-disease.csv.gz directly rather than calling
+clean(), so it stays raw-data-free and always runs, including on a fresh
+clone.
 """
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from nightingale.clean import clean
+from conftest import skip_if_raw_missing
+from nightingale.clean import CLEANED_ROOT
 from nightingale.fetch import RAW_ROOT
 from nightingale.sentinel import (
     LeakageError,
@@ -180,6 +188,8 @@ _HEART_COLUMNS = (
 
 
 def test_raw_switzerland_chol_is_flagged():
+    skip_if_raw_missing("heart-disease")
+
     path = RAW_ROOT / "heart-disease" / "processed.switzerland.data"
     df = pd.read_csv(path, header=None, names=list(_HEART_COLUMNS), na_values="?")
 
@@ -191,8 +201,11 @@ def test_raw_switzerland_chol_is_flagged():
 def test_cleaned_switzerland_chol_is_not_flagged():
     # Proves the cleaner and the detector agree: Task 3's site-scoped
     # chol == 0 -> NaN conversion for Switzerland/VA is exactly what makes
-    # this scan stop flagging chol on the cleaned data.
-    cleaned_path = clean("heart-disease")
+    # this scan stop flagging chol on the cleaned data. Reads the committed
+    # data/cleaned/heart-disease.csv.gz artifact directly (rather than
+    # calling clean(), which would need data/raw/) so this test needs no
+    # raw data and always runs, including on a fresh clone.
+    cleaned_path = CLEANED_ROOT / "heart-disease.csv.gz"
     df = pd.read_csv(cleaned_path, compression="gzip")
     swiss = df[df["site"] == "switzerland"]
 
