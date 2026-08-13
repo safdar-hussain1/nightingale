@@ -13,9 +13,12 @@ written `data/cleaned/<slug>.csv.gz` artifact, not an in-memory object, so the
 tests exercise the real on-disk contract every downstream task depends on.
 """
 
+import struct
+
 import pandas as pd
 import pytest
 
+import nightingale.clean as clean_module
 from nightingale.clean import PIPELINES, CleaningError, _apply_heart_sentinels, _validate, clean
 from nightingale.conditions import CONDITIONS
 
@@ -243,3 +246,41 @@ def test_clean_raises_cleaning_error_when_pipeline_produces_bad_shape(monkeypatc
     monkeypatch.setitem(PIPELINES, "breast-cancer", bad_pipeline)
     with pytest.raises(CleaningError):
         clean("breast-cancer")
+
+
+# ---------------------------------------------------------------------------
+# Deterministic output (provenance-manifest requirement, Task 4 fix round 1)
+# ---------------------------------------------------------------------------
+
+
+def test_cleaned_output_is_byte_reproducible(tmp_path, monkeypatch):
+    # gzip embeds a Unix mtime in its header by default, which makes two
+    # writes of the identical DataFrame produce two different files. Task
+    # 11's Ed25519 provenance manifest needs `clean()`'s output to be
+    # byte-for-byte reproducible so an honest, untouched, correctly
+    # regenerated repo verifies as OK rather than TAMPERED. Redirect
+    # CLEANED_ROOT to a scratch dir (rather than asserting against the real
+    # data/cleaned/ artifact) so this test doesn't depend on run order or
+    # clobber anything, and reads the file back between the two clean()
+    # calls since both write to the same fixed path.
+    monkeypatch.setattr(clean_module, "CLEANED_ROOT", tmp_path)
+
+    path = clean("breast-cancer")
+    first_write = path.read_bytes()
+
+    # Belt-and-braces: check the gzip header's mtime field (bytes 4-7,
+    # little-endian uint32) is pinned to 0 directly, not just that two
+    # back-to-back writes happen to match. A real Unix timestamp is never 0
+    # for any date this project runs on, so this catches a regression to
+    # the default (wall-clock) mtime deterministically -- unlike a bare
+    # write-write comparison, which could accidentally pass even without
+    # the fix if both calls land within the same wall-clock second (gzip's
+    # mtime has 1-second resolution).
+    mtime_field = struct.unpack_from("<I", first_write, 4)[0]
+    assert mtime_field == 0
+
+    path_again = clean("breast-cancer")
+    second_write = path_again.read_bytes()
+
+    assert path == path_again
+    assert first_write == second_write

@@ -297,13 +297,24 @@ def _validate(slug: str, df: pd.DataFrame) -> None:
         raise CleaningError(f"{slug}: all-NaN column(s): {all_nan_cols}")
 
 
+# gzip embeds a Unix mtime in its header by default, which makes
+# `df.to_csv(..., compression="gzip")` produce a different file on every
+# call even when the DataFrame content is byte-for-byte identical. That
+# breaks Task 11's Ed25519 provenance manifest, which must report an
+# untouched, correctly-regenerated repo as OK rather than TAMPERED. Pinning
+# mtime=0 makes the gzip container itself deterministic: two writes of the
+# same DataFrame produce the same file, not just the same decompressed
+# content.
+_GZIP_COMPRESSION = {"method": "gzip", "mtime": 0}
+
+
 def clean(slug: str) -> Path:
     """Clean one condition's raw data and write ``data/cleaned/<slug>.csv.gz``.
 
     Fetches (or verifies the cached copy of) the raw data, runs the
     registered cleaner from :data:`PIPELINES`, fail-fast validates the
-    result, writes the cleaned CSV (gzip-compressed, ``index=False``), and
-    returns its path.
+    result, writes the cleaned CSV (gzip-compressed, ``index=False``,
+    deterministic — see :data:`_GZIP_COMPRESSION`), and returns its path.
     """
     raw_dir = fetch(slug)
     pipeline = PIPELINES[slug]
@@ -313,5 +324,5 @@ def clean(slug: str) -> Path:
 
     CLEANED_ROOT.mkdir(parents=True, exist_ok=True)
     out_path = CLEANED_ROOT / f"{slug}.csv.gz"
-    df.to_csv(out_path, index=False, compression="gzip")
+    df.to_csv(out_path, index=False, compression=_GZIP_COMPRESSION)
     return out_path
