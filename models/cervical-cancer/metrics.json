@@ -1,0 +1,842 @@
+{
+  "brier": [
+    0.05857618290315746,
+    0.05442409162315,
+    0.06264213856061646
+  ],
+  "chosen_params": {
+    "learning_rate": 0.05,
+    "max_depth": 4,
+    "n_estimators": 100
+  },
+  "conformal": {
+    "alpha": 0.1,
+    "q_hat": 0.15517241379310343,
+    "verdict_fractions": {
+      "negative": 0.9906759906759907,
+      "positive": 0.009324009324009324,
+      "uncertain": 0.0
+    }
+  },
+  "cv_summary": {
+    "calibration_method": "isotonic",
+    "chosen_params": {
+      "learning_rate": 0.05,
+      "max_depth": 4,
+      "n_estimators": 100
+    },
+    "diabetes_inner_subsample_n": null,
+    "ece_calibrated": 0.015545524811074664,
+    "ece_uncalibrated": 0.02609830813962574,
+    "fold_params": [
+      {
+        "learning_rate": 0.05,
+        "max_depth": 4,
+        "n_estimators": 100
+      },
+      {
+        "learning_rate": 0.05,
+        "max_depth": 2,
+        "n_estimators": 100
+      },
+      {
+        "learning_rate": 0.1,
+        "max_depth": 4,
+        "n_estimators": 300
+      },
+      {
+        "learning_rate": 0.05,
+        "max_depth": 3,
+        "n_estimators": 100
+      },
+      {
+        "learning_rate": 0.1,
+        "max_depth": 2,
+        "n_estimators": 100
+      }
+    ],
+    "grid": {
+      "learning_rate": [
+        0.05,
+        0.1
+      ],
+      "max_depth": [
+        2,
+        3,
+        4
+      ],
+      "n_estimators": [
+        100,
+        300
+      ]
+    },
+    "inner_n_splits": 3,
+    "oof_brier": 0.059452151715362,
+    "oof_roc_auc": 0.6879316200611343,
+    "outer_n_splits": 5,
+    "seed": 42
+  },
+  "ece": [
+    0.015545524811074664,
+    0.009002045119090757,
+    0.030016696432598237
+  ],
+  "feature_names": [
+    "Age",
+    "Number of sexual partners",
+    "First sexual intercourse",
+    "Num of pregnancies",
+    "Smokes",
+    "Smokes (years)",
+    "Smokes (packs/year)",
+    "Hormonal Contraceptives",
+    "Hormonal Contraceptives (years)",
+    "IUD",
+    "IUD (years)",
+    "STDs",
+    "STDs (number)",
+    "STDs:condylomatosis",
+    "STDs:cervical condylomatosis",
+    "STDs:vaginal condylomatosis",
+    "STDs:vulvo-perineal condylomatosis",
+    "STDs:syphilis",
+    "STDs:pelvic inflammatory disease",
+    "STDs:genital herpes",
+    "STDs:molluscum contagiosum",
+    "STDs:AIDS",
+    "STDs:HIV",
+    "STDs:Hepatitis B",
+    "STDs:HPV",
+    "STDs: Number of diagnosis",
+    "Dx:Cancer",
+    "Dx:CIN",
+    "Dx:HPV",
+    "Dx"
+  ],
+  "n": 858,
+  "n_positive": 55,
+  "net_benefit": [
+    {
+      "model": 0.05105836924018742,
+      "threshold": 0.01,
+      "treat_all": 0.054649054649054646,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.04250511393368536,
+      "threshold": 0.02,
+      "treat_all": 0.04500261643118785,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0338115492754668,
+      "threshold": 0.03,
+      "treat_all": 0.035157282579962985,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.032682595182595184,
+      "threshold": 0.04,
+      "treat_all": 0.025106837606837594,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.027849343638817317,
+      "threshold": 0.05,
+      "treat_all": 0.014844804318488516,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.02229330952735208,
+      "threshold": 0.060000000000000005,
+      "treat_all": 0.004364429896344772,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.015201644233902304,
+      "threshold": 0.06999999999999999,
+      "treat_all": -0.006341328921974074,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.012111077328468632,
+      "threshold": 0.08,
+      "treat_all": -0.017279821627647712,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.007889546351084811,
+      "threshold": 0.09,
+      "treat_all": -0.02845872076641308,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.005698005698005697,
+      "threshold": 0.09999999999999999,
+      "treat_all": -0.03988603988603989,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.004242948063172783,
+      "threshold": 0.11,
+      "treat_all": -0.051570152693748206,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.004450095359186269,
+      "threshold": 0.12,
+      "treat_all": -0.0635198135198135,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0035366931918656037,
+      "threshold": 0.13,
+      "treat_all": -0.07574417919245507,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.00159917601778067,
+      "threshold": 0.14,
+      "treat_all": -0.08825283243887896,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.001028383381324556,
+      "threshold": 0.15000000000000002,
+      "treat_all": -0.10105580693815991,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.00160950160950161,
+      "threshold": 0.16,
+      "treat_all": -0.11416361416361417,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.001291880809953099,
+      "threshold": 0.17,
+      "treat_all": -0.12758727216558544,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0009665131616351129,
+      "threshold": 0.18000000000000002,
+      "treat_all": -0.1413383364602877,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0006331117442228565,
+      "threshold": 0.19,
+      "treat_all": -0.15542893320671097,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0002913752913752919,
+      "threshold": 0.2,
+      "treat_all": -0.16987179487179488,
+      "treat_none": 0.0
+    },
+    {
+      "model": -5.901271724056533e-05,
+      "threshold": 0.21000000000000002,
+      "treat_all": -0.18468029860434926,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0004183850337696488,
+      "threshold": 0.22,
+      "treat_all": -0.19986850756081526,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0037386855568673754,
+      "threshold": 0.23,
+      "treat_all": -0.21545121545121543,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0036191878297141458,
+      "threshold": 0.24000000000000002,
+      "treat_all": -0.23144399460188936,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.003496503496503497,
+      "threshold": 0.25,
+      "treat_all": -0.24786324786324787,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.00378000378000378,
+      "threshold": 0.26,
+      "treat_all": -0.26472626472626476,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0036721269597981927,
+      "threshold": 0.27,
+      "treat_all": -0.2820512820512821,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0035612535612535613,
+      "threshold": 0.28,
+      "treat_all": -0.2998575498575499,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0034472569683837288,
+      "threshold": 0.29000000000000004,
+      "treat_all": -0.318165402672445,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.00333000333000333,
+      "threshold": 0.3,
+      "treat_all": -0.336996336996337,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.003209351035437992,
+      "threshold": 0.31,
+      "treat_all": -0.35637309550353036,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0030851501439736733,
+      "threshold": 0.32,
+      "treat_all": -0.3763197586726999,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0029572417632119123,
+      "threshold": 0.33,
+      "treat_all": -0.39686184462303875,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.002825457370911916,
+      "threshold": 0.34,
+      "treat_all": -0.4180264180264181,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0026896180742334587,
+      "threshold": 0.35000000000000003,
+      "treat_all": -0.43984220907297844,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0013840326340326331,
+      "threshold": 0.36000000000000004,
+      "treat_all": -0.4623397435897437,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0012395012395012392,
+      "threshold": 0.37,
+      "treat_all": -0.48555148555148553,
+      "treat_none": 0.0
+    },
+    {
+      "model": -7.519362358072079e-05,
+      "threshold": 0.38,
+      "treat_all": -0.5095119933829612,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0002292789178035084,
+      "threshold": 0.39,
+      "treat_all": -0.5342580916351408,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.00038850038850038937,
+      "threshold": 0.4,
+      "treat_all": -0.55982905982906,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0005531191971869941,
+      "threshold": 0.41000000000000003,
+      "treat_all": -0.5862668405041287,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0007234145165179655,
+      "threshold": 0.42000000000000004,
+      "treat_all": -0.6136162687886827,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0008996851102114254,
+      "threshold": 0.43,
+      "treat_all": -0.6419253261358524,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0010822510822510825,
+      "threshold": 0.44,
+      "treat_all": -0.6712454212454212,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0012714558169103622,
+      "threshold": 0.45,
+      "treat_all": -0.7016317016317016,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0014676681343348016,
+      "threshold": 0.46,
+      "treat_all": -0.7331433998100665,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0016712846901526155,
+      "threshold": 0.47000000000000003,
+      "treat_all": -0.7658442186744074,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0018827326519634219,
+      "threshold": 0.48000000000000004,
+      "treat_all": -0.799802761341223,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0021024726907079845,
+      "threshold": 0.49,
+      "treat_all": -0.8350930115635997,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0023310023310023314,
+      "threshold": 0.5,
+      "treat_all": -0.8717948717948718,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.002568859711716855,
+      "threshold": 0.51,
+      "treat_all": -0.9099947671376243,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0028166278166278183,
+      "threshold": 0.52,
+      "treat_all": -0.949786324786325,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0030749392451520125,
+      "threshold": 0.53,
+      "treat_all": -0.9912711402073107,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0033444816053511714,
+      "threshold": 0.54,
+      "treat_all": -1.0345596432552955,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0036260036260036287,
+      "threshold": 0.55,
+      "treat_all": -1.07977207977208,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.003920322102140286,
+      "threshold": 0.56,
+      "treat_all": -1.1270396270396272,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.004228329809725161,
+      "threshold": 0.5700000000000001,
+      "treat_all": -1.1765056648777583,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.004551004551004555,
+      "threshold": 0.5800000000000001,
+      "treat_all": -1.2283272283272286,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.004889419523565865,
+      "threshold": 0.59,
+      "treat_all": -1.2826766729205752,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.005244755244755244,
+      "threshold": 0.6,
+      "treat_all": -1.3397435897435896,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.005618313310621004,
+      "threshold": 0.61,
+      "treat_all": -1.3997370151216306,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.006011532327321802,
+      "threshold": 0.62,
+      "treat_all": -1.4628879892037787,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.006426006426006426,
+      "threshold": 0.63,
+      "treat_all": -1.5294525294525294,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.006863506863506865,
+      "threshold": 0.64,
+      "treat_all": -1.5997150997151,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0073260073260073295,
+      "threshold": 0.65,
+      "treat_all": -1.6739926739926743,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.007815713698066641,
+      "threshold": 0.66,
+      "treat_all": -1.7526395173454,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0023663205481387305,
+      "threshold": 0.67,
+      "treat_all": -1.8360528360528365,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0024766899766899774,
+      "threshold": 0.68,
+      "treat_all": -1.9246794871794877,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.002594180013534853,
+      "threshold": 0.6900000000000001,
+      "treat_all": -2.019023986765923,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0027195027195027204,
+      "threshold": 0.7000000000000001,
+      "treat_all": -2.11965811965812,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.002853468370709751,
+      "threshold": 0.7100000000000001,
+      "treat_all": -2.2272325375773665,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.0029970029970029966,
+      "threshold": 0.72,
+      "treat_all": -2.342490842490842,
+      "treat_none": 0.0
+    },
+    {
+      "model": -0.003151169817836484,
+      "threshold": 0.73,
+      "treat_all": -2.466286799620133,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.74,
+      "treat_all": -2.5996055226824453,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.75,
+      "treat_all": -2.7435897435897436,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.76,
+      "treat_all": -2.89957264957265,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.77,
+      "treat_all": -3.069119286510591,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.78,
+      "treat_all": -3.2540792540792545,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.79,
+      "treat_all": -3.4566544566544577,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.8,
+      "treat_all": -3.6794871794871806,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.81,
+      "treat_all": -3.9257759784075583,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.8200000000000001,
+      "treat_all": -4.199430199430201,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.8300000000000001,
+      "treat_all": -4.505279034690802,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.8400000000000001,
+      "treat_all": -4.849358974358978,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.85,
+      "treat_all": -5.239316239316239,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.86,
+      "treat_all": -5.684981684981685,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.87,
+      "treat_all": -6.199211045364891,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.88,
+      "treat_all": -6.7991452991453,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.89,
+      "treat_all": -7.508158508158509,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.9,
+      "treat_all": -8.358974358974361,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.91,
+      "treat_all": -9.398860398860402,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.92,
+      "treat_all": -10.698717948717956,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.93,
+      "treat_all": -12.36996336996338,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.9400000000000001,
+      "treat_all": -14.598290598290612,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.9500000000000001,
+      "treat_all": -17.717948717948744,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.9600000000000001,
+      "treat_all": -22.39743589743594,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.97,
+      "treat_all": -30.19658119658117,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.98,
+      "treat_all": -45.79487179487176,
+      "treat_none": 0.0
+    },
+    {
+      "model": 0.0,
+      "threshold": 0.99,
+      "treat_all": -92.5897435897435,
+      "treat_none": 0.0
+    }
+  ],
+  "pr_auc": [
+    0.14115177957138353,
+    0.09746466591297753,
+    0.2318378728270343
+  ],
+  "prevalence": 0.0641025641025641,
+  "reliability": [
+    {
+      "bin_hi": 0.1,
+      "bin_lo": 0.0,
+      "frac_pos": 0.04838709677419355,
+      "mean_pred": 0.04094029854539685,
+      "n": 682
+    },
+    {
+      "bin_hi": 0.2,
+      "bin_lo": 0.1,
+      "frac_pos": 0.1118421052631579,
+      "mean_pred": 0.12133532112800598,
+      "n": 152
+    },
+    {
+      "bin_hi": 0.30000000000000004,
+      "bin_lo": 0.2,
+      "frac_pos": 0.0,
+      "mean_pred": 0.22487700098714694,
+      "n": 14
+    },
+    {
+      "bin_hi": 0.4,
+      "bin_lo": 0.30000000000000004,
+      "frac_pos": 1.0,
+      "mean_pred": 0.3668608198725555,
+      "n": 2
+    },
+    {
+      "bin_hi": 0.5,
+      "bin_lo": 0.4,
+      "frac_pos": null,
+      "mean_pred": null,
+      "n": 0
+    },
+    {
+      "bin_hi": 0.6000000000000001,
+      "bin_lo": 0.5,
+      "frac_pos": null,
+      "mean_pred": null,
+      "n": 0
+    },
+    {
+      "bin_hi": 0.7000000000000001,
+      "bin_lo": 0.6000000000000001,
+      "frac_pos": 0.42857142857142855,
+      "mean_pred": 0.6666666666666666,
+      "n": 7
+    },
+    {
+      "bin_hi": 0.8,
+      "bin_lo": 0.7000000000000001,
+      "frac_pos": 0.0,
+      "mean_pred": 0.7351520436641948,
+      "n": 1
+    },
+    {
+      "bin_hi": 0.9,
+      "bin_lo": 0.8,
+      "frac_pos": null,
+      "mean_pred": null,
+      "n": 0
+    },
+    {
+      "bin_hi": 1.0,
+      "bin_lo": 0.9,
+      "frac_pos": null,
+      "mean_pred": null,
+      "n": 0
+    }
+  ],
+  "roc_auc": [
+    0.6703271821578173,
+    0.5942024227329333,
+    0.7452009509792822
+  ],
+  "slug": "cervical-cancer",
+  "subgroup_audits": {
+    "age_band": [
+      {
+        "auc": null,
+        "auc_hi": null,
+        "auc_lo": null,
+        "group": "45-54",
+        "mean_cal_error": null,
+        "n": 18,
+        "n_positive": 4,
+        "sufficient": false
+      },
+      {
+        "auc": null,
+        "auc_hi": null,
+        "auc_lo": null,
+        "group": "55-64",
+        "mean_cal_error": null,
+        "n": 1,
+        "n_positive": 0,
+        "sufficient": false
+      },
+      {
+        "auc": null,
+        "auc_hi": null,
+        "auc_lo": null,
+        "group": "65+",
+        "mean_cal_error": null,
+        "n": 4,
+        "n_positive": 0,
+        "sufficient": false
+      },
+      {
+        "auc": 0.6742446978791519,
+        "auc_hi": 0.7590673769507803,
+        "auc_lo": 0.5871914390756302,
+        "group": "<45",
+        "mean_cal_error": 0.003113090341917764,
+        "n": 835,
+        "n_positive": 51,
+        "sufficient": true
+      }
+    ]
+  }
+}

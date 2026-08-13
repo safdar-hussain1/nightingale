@@ -1,0 +1,19 @@
+{
+  "command": "PYTHONPATH=src /Users/safdarhussain/Desktop/Projects/GitHub/.venv/bin/python scripts/train_all.py",
+  "conformal_alpha": 0.1,
+  "finished_utc": "2026-08-13T16:48:49.290072+00:00",
+  "generated_utc": "2026-08-13T16:48:49.290072+00:00",
+  "n_boot": 2000,
+  "per_condition_wall_seconds": {
+    "breast-cancer": 13.236818790435791,
+    "cervical-cancer": 8.967296123504639,
+    "diabetes": 301.591096162796,
+    "heart-disease": 18.30247211456299,
+    "kidney-disease": 10.403198957443237,
+    "liver-disease": 12.514096975326538
+  },
+  "seed": 42,
+  "started_utc": "2026-08-13T16:48:38.886599+00:00",
+  "subgroup_min_n": 40,
+  "total_wall_seconds": 365.0149791240692
+}
