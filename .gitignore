@@ -1,16 +1,26 @@
+# Raw data (fetched from UCI, not committed)
+data/raw/
+
+# Private artifacts (signing keys, handbook) — never committed
+private/
+.claude/keys/
+
 # Python
 __pycache__/
 *.py[cod]
 *.egg-info/
+.pytest_cache/
 .venv/
 venv/
-.pytest_cache/
 
 # Jupyter
 .ipynb_checkpoints/
 
 # OS
 .DS_Store
+
+# Node (dashboard tooling)
+node_modules/
 
 # Editors
 .vscode/
