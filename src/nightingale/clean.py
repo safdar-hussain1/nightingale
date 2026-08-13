@@ -121,6 +121,30 @@ _HEART_SITES = {
 }
 
 
+def _apply_heart_sentinels(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert heart-disease missing-value sentinels (chol/trestbps == 0) to NaN.
+
+    A living patient cannot have zero serum cholesterol or zero resting
+    blood pressure — both are missing-value sentinels, not real readings.
+
+    ``chol == 0`` is scoped to the Switzerland and VA sites only: they are
+    confirmed (raw-data profile) to encode missing cholesterol this way,
+    while Cleveland and Hungary never emit a genuine ``chol == 0`` — applying
+    the substitution globally would instead corrupt any real low-cholesterol
+    reading those two sites happened to record.
+
+    ``trestbps == 0`` is applied globally (no site scoping): it is
+    physiologically impossible everywhere the file records it.
+
+    Returns a new DataFrame; ``df`` is not mutated in place.
+    """
+    df = df.copy()
+    swiss_or_va = df["site"].isin(["switzerland", "va"])
+    df.loc[swiss_or_va & (df["chol"] == 0), "chol"] = pd.NA
+    df.loc[df["trestbps"] == 0, "trestbps"] = pd.NA
+    return df
+
+
 def _clean_heart_disease(raw_dir: Path) -> pd.DataFrame:
     frames = []
     for filename, site in _HEART_SITES.items():
@@ -131,17 +155,7 @@ def _clean_heart_disease(raw_dir: Path) -> pd.DataFrame:
         frames.append(site_df)
     df = pd.concat(frames, ignore_index=True)
 
-    # A living patient cannot have zero serum cholesterol — chol == 0 is a
-    # missing-value sentinel, not a real reading. The Switzerland and VA
-    # sites encode missing chol this way; Cleveland and Hungary never emit a
-    # genuine chol == 0 (confirmed in the raw-data profile), so the
-    # substitution is scoped to those two sites rather than applied globally.
-    swiss_or_va = df["site"].isin(["switzerland", "va"])
-    df.loc[swiss_or_va & (df["chol"] == 0), "chol"] = pd.NA
-
-    # Resting blood pressure of 0 is likewise physiologically impossible and
-    # is a missing-value sentinel wherever it appears, across all sites.
-    df.loc[df["trestbps"] == 0, "trestbps"] = pd.NA
+    df = _apply_heart_sentinels(df)
 
     df["target"] = (df["num"] > 0).astype("int64")  # presence of disease = positive
     df = df.drop(columns=["num"])

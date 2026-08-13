@@ -16,7 +16,7 @@ tests exercise the real on-disk contract every downstream task depends on.
 import pandas as pd
 import pytest
 
-from nightingale.clean import PIPELINES, CleaningError, _validate, clean
+from nightingale.clean import PIPELINES, CleaningError, _apply_heart_sentinels, _validate, clean
 from nightingale.conditions import CONDITIONS
 
 ALL_SLUGS = sorted(CONDITIONS.keys())
@@ -93,14 +93,29 @@ def test_heart_switzerland_chol_entirely_nan(cleaned_frames):
     assert swiss["chol"].isna().all()
 
 
-def test_heart_cleveland_and_hungary_chol_not_all_nan(cleaned_frames):
-    # Proves the sentinel rule is site-scoped, not applied globally: these
-    # two sites genuinely have no chol==0 readings, so their chol column
-    # must retain real (non-all-NaN) values.
-    df = cleaned_frames["heart-disease"]
-    for site in ("cleveland", "hungarian"):
-        subset = df[df["site"] == site]
-        assert not subset["chol"].isna().all()
+def test_apply_heart_sentinels_chol_rule_is_site_scoped():
+    # Genuinely discriminates the site-scoping: a synthetic frame with a
+    # cleveland row and a switzerland row that BOTH have chol == 0. If the
+    # sentinel rule were applied globally instead of scoped to
+    # switzerland/va, the cleveland zero would also be wiped to NaN. Real
+    # cleveland/hungary raw data happens to have zero chol==0 rows at all,
+    # which is why testing against the real cleaned frames (as the old
+    # version of this test did) can't tell scoped from global — this
+    # synthetic frame can.
+    df = pd.DataFrame(
+        {
+            "chol": [0, 0],
+            "trestbps": [120, 130],
+            "site": ["cleveland", "switzerland"],
+        }
+    )
+
+    result = _apply_heart_sentinels(df)
+
+    cleveland_chol = result.loc[result["site"] == "cleveland", "chol"].iloc[0]
+    switzerland_chol = result.loc[result["site"] == "switzerland", "chol"].iloc[0]
+    assert cleveland_chol == 0  # site-scoped rule: cleveland zero survives
+    assert pd.isna(switzerland_chol)  # switzerland zero becomes NaN
 
 
 def test_heart_no_zero_chol_or_trestbps_anywhere(cleaned_frames):
