@@ -15,6 +15,18 @@ The three mutation tests (A: calibration leak, B: fold integrity, C:
 fold-safe encoding) each prove a specific protection is *live* in
 train_condition, not merely that the underlying primitive works in
 isolation -- see nightingale.sentinel and the task brief's spec §4.5.
+
+Also covers cross-fitted calibration (oof["p_cal"]): a correction made
+after an initial version of this module reported a calibrated ECE of
+~1e-16-1e-19 -- not a real result, but isotonic regression interpolating
+its own training sample after being fit and scored on the same pooled OOF.
+test_cross_fitted_ece_is_non_degenerate and
+test_cross_fitted_ece_is_substantially_larger_than_in_sample_ece together
+pin down, numerically, that oof["p_cal"] is a genuinely out-of-sample
+number and would fail loudly if anyone reintroduced in-sample scoring;
+test_cross_fit_calibration_excludes_each_rows_own_fold proves it at the
+index level (every row's p_cal comes from a calibrator fit on rows
+excluding it), not just via the aggregate ECE gap.
 """
 
 import numpy as np
@@ -23,6 +35,7 @@ import pytest
 import xgboost as xgb
 from sklearn.metrics import roc_auc_score
 
+from nightingale.calibrate import ece, fit_calibrator
 from nightingale.clean import CLEANED_ROOT
 from nightingale.sentinel import LeakageError
 import nightingale.model as model_module
@@ -31,7 +44,9 @@ from nightingale.model import (
     GRID_LEARNING_RATE,
     GRID_MAX_DEPTH,
     GRID_N_ESTIMATORS,
+    OUTER_N_SPLITS,
     TrainResult,
+    _cross_fit_calibration,
     _feature_columns,
     _grid_combos,
     _most_frequent_params,
@@ -296,3 +311,107 @@ def test_one_hot_fold_safe_preserves_numeric_nan_untouched():
     # NaN passes through untouched -- no imputation anywhere in this path.
     assert X_train_enc["num"].isna().sum() == 1
     assert X_eval_enc["num"].isna().sum() == 1
+
+
+# ---------------------------------------------------------------------------
+# Cross-fitted calibration (Fix round 1: p_cal must be out-of-sample)
+# ---------------------------------------------------------------------------
+#
+# An earlier version of train_condition fit ONE calibrator on the full
+# pooled OOF and scored it against that same pool to produce p_cal -- that
+# is in-sample for the calibrator (even though p_raw is genuinely OOF for
+# the base model), and isotonic regression is flexible enough to make the
+# resulting "calibrated ECE" land at machine-epsilon: not a measurement,
+# an artifact. These three tests pin the fix down so it can't silently
+# regress: (a) the cross-fitted ECE must be clearly nonzero, (b) it must be
+# substantially larger than the in-sample number it replaced, and (c) the
+# index-level mechanism producing it must actually exclude each row's own
+# fold, not just happen to produce a bigger number for some other reason.
+
+
+def test_cross_fitted_ece_is_non_degenerate():
+    result = train_condition("breast-cancer", seed=42)
+
+    ece_calibrated = result.cv_summary["ece_calibrated"]
+
+    # Machine-epsilon-scale ECE (~1e-16) is exactly the in-sample-scoring
+    # bug this test guards against; a genuinely out-of-sample calibrated
+    # ECE on 569 real rows has no reason to land anywhere near that.
+    assert ece_calibrated > 1e-6
+
+
+def test_cross_fitted_ece_is_substantially_larger_than_in_sample_ece():
+    result = train_condition("breast-cancer", seed=42)
+
+    y_true = result.oof["y_true"].to_numpy()
+    p_raw = result.oof["p_raw"].to_numpy()
+    method = result.calibrator.export()["type"]
+
+    # In-sample, on purpose: fit the SAME calibrator family on the full
+    # pooled OOF and score it against that same pool -- this is exactly
+    # the old (incorrect) computation, reproduced here deliberately as the
+    # baseline this test measures the fix against.
+    in_sample_calibrator = fit_calibrator(y_true, p_raw, method=method)
+    in_sample_ece = ece(y_true, in_sample_calibrator.predict(p_raw))
+
+    cross_fitted_ece = ece(y_true, result.oof["p_cal"].to_numpy())
+
+    assert cross_fitted_ece == pytest.approx(result.cv_summary["ece_calibrated"])
+    assert in_sample_ece < cross_fitted_ece
+    # Not just "smaller" -- an order of magnitude, so this documents the
+    # measured size of the effect rather than tolerating noise-level gaps.
+    assert in_sample_ece < cross_fitted_ece / 10
+
+
+def test_cross_fit_calibration_excludes_each_rows_own_fold(monkeypatch):
+    """Every row's p_cal must come from a calibrator that never saw that row.
+
+    Spies on assert_calibrator_held_out (called once per outer fold inside
+    _cross_fit_calibration) and checks, at the index level, that each
+    call's calibration-fit indices are exactly "every row NOT in this
+    fold" and its scored indices are exactly "every row IN this fold" --
+    not merely that the guard function exists and would raise in theory.
+    """
+    rng = np.random.default_rng(11)
+    n = 40
+    n_folds = 5
+    oof = pd.DataFrame(
+        {
+            "y_true": rng.integers(0, 2, n),
+            "p_raw": rng.uniform(0.0, 1.0, n),
+            "fold": np.tile(np.arange(n_folds), n // n_folds),
+        }
+    )
+
+    calls = []
+    real_guard = model_module.assert_calibrator_held_out
+
+    def spy_guard(cal_idx, eval_idx):
+        calls.append((np.asarray(list(cal_idx)), np.asarray(list(eval_idx))))
+        return real_guard(cal_idx, eval_idx)
+
+    monkeypatch.setattr(model_module, "assert_calibrator_held_out", spy_guard)
+
+    p_cal = _cross_fit_calibration(oof, method="sigmoid")
+
+    assert len(calls) == n_folds  # once per outer fold, not once total
+
+    fold_values = oof["fold"].to_numpy()
+    all_scored = set()
+    for cal_idx, eval_idx in calls:
+        scored_folds = set(fold_values[eval_idx].tolist())
+        assert len(scored_folds) == 1  # this call's eval_idx is one whole fold
+        k = scored_folds.pop()
+
+        expected_eval = set(np.where(fold_values == k)[0].tolist())
+        expected_cal = set(range(n)) - expected_eval
+
+        assert set(eval_idx.tolist()) == expected_eval
+        assert set(cal_idx.tolist()) == expected_cal
+        assert set(cal_idx.tolist()).isdisjoint(eval_idx.tolist())
+
+        all_scored |= expected_eval
+
+    assert all_scored == set(range(n))  # every row scored exactly once, by some fold
+    assert p_cal.shape == (n,)
+    assert not np.any(np.isnan(p_cal))

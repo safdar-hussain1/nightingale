@@ -34,12 +34,28 @@ Protocol, exactly:
 - ``final_model`` is refit on ALL rows using the most-frequently-chosen
   params across the 5 outer folds (:func:`_most_frequent_params` documents
   the tie-break rule).
-- The calibrator is fit once, on the pooled OOF ``p_raw`` -- never on
-  ``final_model``'s own in-sample training predictions (that substitution
-  is exactly the leak :func:`nightingale.sentinel.assert_calibrator_held_out`
-  exists to catch). It is called live, per outer fold, on that fold's real
-  ``(train_idx, eval_idx)`` -- the indices behind that fold's contribution
-  to the pooled OOF data the calibrator is fit on -- not decoratively.
+- ``TrainResult.calibrator`` is fit once, on the pooled OOF ``p_raw`` --
+  never on ``final_model``'s own in-sample training predictions (that
+  substitution is exactly the leak
+  :func:`nightingale.sentinel.assert_calibrator_held_out` exists to catch).
+  This is the DEPLOYMENT calibrator: the artifact Task 10 exports for
+  scoring genuinely new rows, where "fit on all the OOF signal we have" is
+  correct and desirable.
+- ``oof["p_cal"]``, by contrast, is produced by CROSS-FITTED calibration
+  (:func:`_cross_fit_calibration`): for each outer fold k, a fresh
+  calibrator is fit on every OOF row NOT in fold k and applied only to fold
+  k's rows. A single calibrator fit on the full pooled OOF and then scored
+  on that same pool would be in-sample for the calibrator itself (even
+  though the underlying ``p_raw`` values are genuinely out-of-fold for the
+  base model) -- isotonic regression in particular is flexible enough to
+  reproduce its own training sample's empirical bin frequencies almost
+  exactly, which is what made an earlier version of this module report a
+  calibrated ECE of ~1e-16-1e-19: not a result, an artifact of scoring a
+  calibrator on its own training data. Every published metric (Task 6+)
+  MUST be computed from ``oof["p_cal"]``, never from re-scoring
+  ``TrainResult.calibrator`` against the pooled OOF it was fit on.
+  ``assert_calibrator_held_out`` is called live here too, once per
+  cross-fit, on that fold's real held-out/scored index split.
 """
 
 from __future__ import annotations
@@ -53,7 +69,7 @@ import xgboost as xgb
 from sklearn.metrics import brier_score_loss, roc_auc_score
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
-from nightingale.calibrate import Calibrator, ece, pick_calibration
+from nightingale.calibrate import Calibrator, ece, fit_calibrator, pick_calibration
 from nightingale.clean import CLEANED_ROOT
 from nightingale.conditions import CONDITIONS
 from nightingale.sentinel import assert_calibrator_held_out
@@ -256,6 +272,52 @@ def _most_frequent_params(fold_params: list[dict]) -> dict:
     raise AssertionError("unreachable: fold_params must be non-empty")  # pragma: no cover
 
 
+def _cross_fit_calibration(oof: pd.DataFrame, method: str) -> np.ndarray:
+    """Out-of-sample ``p_cal`` via cross-fitted calibration over the outer folds.
+
+    For each outer fold k, fits a fresh calibrator of ``method`` on every
+    OOF row NOT in fold k (their own ``p_raw``/``y_true``), then applies it
+    to fold k's rows only. Every returned ``p_cal`` value therefore comes
+    from a calibrator that never saw that row -- unlike scoring a single
+    calibrator fit on the *full* pooled OOF against that same pool, which
+    is in-sample for the calibrator (see the module docstring for why that
+    distinction is load-bearing, not pedantic).
+
+    ``method`` is fixed across every cross-fit rather than re-selected via
+    :func:`nightingale.calibrate.pick_calibration` per fold. Two reasons:
+    (1) it keeps the reported calibrated-ECE an honest out-of-sample
+    estimate of the SAME family ``TrainResult.calibrator`` actually
+    deploys, rather than a metric for a method that might differ fold to
+    fold; (2) re-running method selection on ~4/5 of an already modest OOF
+    sample, 5 times, adds selection variance the metric doesn't need.
+    Callers pick ``method`` once, from :func:`pick_calibration` on the full
+    pooled OOF (the same selection ``TrainResult.calibrator`` used).
+
+    ``assert_calibrator_held_out`` is called once per fold: ``cal_idx``
+    (the rows fitting this fold's calibrator) and ``eval_idx`` (fold k's
+    own rows, being scored) are disjoint by construction of the boolean
+    mask below, and this call proves that live rather than trusting it.
+    """
+    y_true = oof["y_true"].to_numpy()
+    p_raw = oof["p_raw"].to_numpy()
+    fold = oof["fold"].to_numpy()
+    n = len(oof)
+    positions = np.arange(n)
+
+    p_cal = np.full(n, np.nan)
+    for k in sorted(set(fold.tolist())):
+        eval_mask = fold == k
+        cal_mask = ~eval_mask
+
+        assert_calibrator_held_out(positions[cal_mask], positions[eval_mask])
+
+        fold_calibrator = fit_calibrator(y_true[cal_mask], p_raw[cal_mask], method=method)
+        p_cal[eval_mask] = fold_calibrator.predict(p_raw[eval_mask])
+
+    assert not np.any(np.isnan(p_cal))  # every row's fold is in `fold`'s own value set
+    return p_cal
+
+
 def train_condition(slug: str, seed: int = 42) -> TrainResult:
     """Nested-CV training with held-out calibration for one condition.
 
@@ -329,10 +391,18 @@ def train_condition(slug: str, seed: int = 42) -> TrainResult:
         index=df.index,
     )
 
-    # Calibrator fit on the pooled OOF p_raw -- never on final_model's own
-    # (in-sample, below) training predictions.
+    # Deployment calibrator: fit once on the pooled OOF p_raw -- never on
+    # final_model's own (in-sample, below) training predictions. This is
+    # the artifact TrainResult.calibrator exports for scoring genuinely new
+    # rows (Task 10); it is NOT what oof["p_cal"] is computed from below.
     calibrator = pick_calibration(oof["y_true"].to_numpy(), oof["p_raw"].to_numpy())
-    oof["p_cal"] = calibrator.predict(oof["p_raw"].to_numpy())
+    chosen_calibration_method = calibrator.export()["type"]
+
+    # oof["p_cal"]: cross-fitted, out-of-sample calibration -- see
+    # _cross_fit_calibration and the module docstring for why scoring the
+    # single deployment `calibrator` against its own pooled-OOF training
+    # sample (the previous, incorrect approach) is not a valid metric.
+    oof["p_cal"] = _cross_fit_calibration(oof, method=chosen_calibration_method)
     oof = oof[["y_true", "p_raw", "p_cal", "fold"]]
 
     chosen_params = _most_frequent_params(fold_params)
@@ -362,7 +432,7 @@ def train_condition(slug: str, seed: int = 42) -> TrainResult:
         "oof_brier": oof_brier,
         "ece_uncalibrated": ece_uncalibrated,
         "ece_calibrated": ece_calibrated,
-        "calibration_method": calibrator.export()["type"],
+        "calibration_method": chosen_calibration_method,
         "diabetes_inner_subsample_n": subsample_n,
     }
 
