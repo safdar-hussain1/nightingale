@@ -26,24 +26,31 @@ orchestrates those helpers over a site-filtered frame instead of calling
 ``train_condition`` directly.
 
 For each of the three sites Cleveland's model never saw --
-``hungarian``/``switzerland``/``va`` -- two things are reported:
+``hungarian``/``switzerland``/``va`` -- :func:`transfer_study` reports THREE
+blocks per site, and their names are deliberately unambiguous about which
+row set each one is computed on (fix round 1 -- see :func:`transfer_study`'s
+own docstring for the full story of why the schema is shaped this way):
 
-1. **Naive transfer**: the Cleveland-trained-and-calibrated pipeline
+1. **``naive_all_rows``**: the Cleveland-trained-and-calibrated pipeline
    (``final_model.predict_proba`` run through the Cleveland-fitted
    deployment calibrator) scored as-is on the WHOLE target site, with no
-   site-specific adjustment at all -- ROC-AUC/PR-AUC/Brier/ECE (each a
-   bootstrap ``[point, lo, hi]`` triple via
-   :func:`nightingale.evaluate.metric_ci`) plus
-   :func:`calibration_in_the_large`'s intercept/slope diagnostic.
-2. **Intercept recalibration**: a seeded 30/70 site-LOCAL split
+   site-specific adjustment at all -- informative on its own ("what does
+   zero-effort deployment look like"), but NEVER compared directly against
+   ``recalibrated`` (different row count, different rows).
+2. **``naive``** and **``recalibrated``**: a seeded 30/70 site-LOCAL split
    (:func:`_calibration_eval_split`) fits a single intercept correction on
    the 30% calibration rows (:func:`_fit_intercept_only` -- slope pinned at
-   1, only the intercept is free) and reports before/after metrics on the
-   SAME 70% evaluation rows, so the comparison is like-for-like. The 30%
-   calibration rows never appear in the 70% evaluation rows --
-   :func:`nightingale.sentinel.assert_calibrator_held_out` is called live
-   on that split, exactly as :mod:`nightingale.model` calls it on every
-   outer CV fold.
+   1, only the intercept is free); ``naive`` is the SAME 70% evaluation
+   rows scored WITHOUT that correction, ``recalibrated`` is those IDENTICAL
+   rows scored WITH it. These two are the like-for-like pair: same ``n``,
+   same rows, only the probabilities differ. The 30% calibration rows never
+   appear in the 70% evaluation rows -- :func:`nightingale.sentinel.assert_calibrator_held_out`
+   is called live on that split, exactly as :mod:`nightingale.model` calls
+   it on every outer CV fold.
+
+All three blocks report ROC-AUC/PR-AUC/Brier/ECE (each a bootstrap
+``[point, lo, hi]`` triple via :func:`nightingale.evaluate.metric_ci`) plus
+:func:`calibration_in_the_large`'s intercept/slope diagnostic.
 
 Two calibration-diagnostic concepts appear here and are NOT the same thing,
 despite both operating on logit(p):
@@ -52,7 +59,8 @@ despite both operating on logit(p):
   logistic regression of y on logit(p) -- both intercept and slope are
   free. It measures HOW miscalibrated a set of probabilities is (intercept
   ~ prevalence mismatch, slope ~ over/under-dispersion), and is computed
-  for "naive", "before", and "after" alike, purely to report the number.
+  for ``naive_all_rows``, ``naive``, and ``recalibrated`` alike, purely to
+  report the number.
 - :func:`_fit_intercept_only` is the REPAIR: slope is PINNED at 1 by
   construction (only the intercept is fit), because that is what "intercept
   recalibration" means -- a pure prevalence-shift correction, not a full
@@ -396,6 +404,33 @@ def transfer_study(seed: int = 42) -> dict:
     ``seed`` -- no wall-clock timestamp anywhere in the returned dict, so
     two calls with the same seed produce byte-identical JSON (pinned by
     ``tests/test_external.py::test_transfer_study_is_deterministic_across_two_independent_calls``).
+
+    **Schema, and why it's shaped this way (fix round 1):** each site's
+    ``"naive"`` and ``"recalibrated"`` blocks are DIRECT SIBLINGS, and both
+    are computed on the IDENTICAL 70% evaluation row set -- ``"naive"`` is
+    ``p_naive`` scored on ``eval_idx`` (no recalibration applied),
+    ``"recalibrated"`` is the intercept-corrected ``p_recal`` scored on the
+    SAME ``eval_idx``. This is deliberate: an earlier version of this
+    function put the recalibrated-AFTER metrics directly under
+    ``"recalibrated"`` and the pre-recalibration-on-the-same-70%-rows
+    metrics one level deeper, under ``"recalibrated"["before"]`` -- with the
+    WHOLE-SITE naive numbers occupying the sibling ``"naive"`` slot instead.
+    That let a reader compare the two top-level siblings ``"naive"``
+    (whole site) against ``"recalibrated"`` (70% subset, after) and observe
+    ROC-AUC apparently CHANGE under recalibration -- not because
+    recalibration changed anything (it provably can't: see the module
+    docstring's monotone-transform argument), but purely because the two
+    numbers being compared came from two DIFFERENT row sets. The actual
+    before/after pair (both on the 70% subset) WAS bit-identical even in
+    that version; the defect was that the schema made it trivial to compare
+    the wrong two numbers and get a wrong, alarming-looking answer. Now
+    ``site["naive"]["roc_auc"][0] == site["recalibrated"]["roc_auc"][0]``
+    holds directly, for the two fields anyone would naturally compare.
+
+    The whole-site "what if there's no site-local calibration data at all"
+    numbers are still reported -- genuinely informative on their own -- but
+    live in a clearly, unambiguously separate ``"naive_all_rows"`` block
+    with its own ``n``, so nothing can mistake it for the like-for-like pair.
     """
     heart_df = _load_heart_disease()
     cleveland_train = _train_cleveland(heart_df, seed)
@@ -404,58 +439,64 @@ def transfer_study(seed: int = 42) -> dict:
 
     for site_offset, site in enumerate(TARGET_SITES):
         site_df = heart_df[heart_df["site"] == site].reset_index(drop=True)
-        y_site, p_naive = _score_site(cleveland_train, site_df)
+        y_site, p_naive_site = _score_site(cleveland_train, site_df)
 
         n = len(y_site)
         n_positive = int(y_site.sum())
 
         # Each site gets its own 1000-wide seed band, and each block within
-        # a site (naive / before / after) its own 100-wide sub-band, so
-        # every one of this study's ~36 bootstrap resampling streams (3
-        # sites x 3 blocks x 4 metrics) is distinct -- see _bootstrap_metrics'
-        # docstring for why correlated bootstrap seeds would be a defect.
+        # a site (naive_all_rows / naive / recalibrated) its own 100-wide
+        # sub-band, so every one of this study's ~36 bootstrap resampling
+        # streams (3 sites x 3 blocks x 4 metrics) is distinct -- see
+        # _bootstrap_metrics' docstring for why correlated bootstrap seeds
+        # would be a defect.
         site_seed_base = seed + site_offset * 1000
 
-        naive_block = _bootstrap_metrics(y_site, p_naive, seed=site_seed_base)
-        naive_intercept, naive_slope = calibration_in_the_large(y_site, p_naive)
-        naive_block["calibration_intercept"] = naive_intercept
-        naive_block["calibration_slope"] = naive_slope
+        # Whole-site reference numbers -- informative (what transfer looks
+        # like with zero site-local data), but NEVER the like-for-like
+        # before/after pair. Kept clearly separate; see the docstring above.
+        naive_all_rows_block = _bootstrap_metrics(y_site, p_naive_site, seed=site_seed_base)
+        all_rows_intercept, all_rows_slope = calibration_in_the_large(y_site, p_naive_site)
+        naive_all_rows_block["calibration_intercept"] = all_rows_intercept
+        naive_all_rows_block["calibration_slope"] = all_rows_slope
 
         # Seeded 30/70 site-local split. assert_calibrator_held_out is
         # called live here, exactly as nightingale.model calls it on every
         # outer CV fold -- the 30% calibration rows must never leak into
-        # the 70% evaluation rows this block reports before/after on.
+        # the 70% evaluation rows both "naive" and "recalibrated" below
+        # are scored on.
         cal_idx, eval_idx = _calibration_eval_split(y_site, seed=seed)
         assert_calibrator_held_out(cal_idx, eval_idx)
 
-        y_cal, p_cal_set = y_site[cal_idx], p_naive[cal_idx]
-        y_eval, p_eval = y_site[eval_idx], p_naive[eval_idx]
+        y_cal, p_cal_set = y_site[cal_idx], p_naive_site[cal_idx]
+        y_eval, p_eval = y_site[eval_idx], p_naive_site[eval_idx]
 
         fitted_intercept = _fit_intercept_only(y_cal, p_cal_set)
         p_recal_eval = _sigmoid(_logit(p_eval) + fitted_intercept)
 
-        before_block = _bootstrap_metrics(y_eval, p_eval, seed=site_seed_base + 100)
-        before_intercept, before_slope = calibration_in_the_large(y_eval, p_eval)
-        before_block["calibration_intercept"] = before_intercept
-        before_block["calibration_slope"] = before_slope
+        # "naive" and "recalibrated" are the like-for-like pair: SAME
+        # eval_idx rows, only the probabilities differ (p_eval vs
+        # p_recal_eval). ROC-AUC/PR-AUC must therefore match exactly
+        # between them (monotone-transform invariance) -- verified by
+        # tests/test_external.py against this exact published path.
+        naive_block = _bootstrap_metrics(y_eval, p_eval, seed=site_seed_base + 100)
+        naive_intercept, naive_slope = calibration_in_the_large(y_eval, p_eval)
+        naive_block["calibration_intercept"] = naive_intercept
+        naive_block["calibration_slope"] = naive_slope
 
-        after_block = _bootstrap_metrics(y_eval, p_recal_eval, seed=site_seed_base + 200)
-        after_intercept, after_slope = calibration_in_the_large(y_eval, p_recal_eval)
-        after_block["calibration_intercept"] = after_intercept
-        after_block["calibration_slope"] = after_slope
-
-        recalibrated_block = {
-            "n_calibration": int(len(cal_idx)),
-            "n_evaluation": int(len(eval_idx)),
-            "fitted_intercept": fitted_intercept,
-            **after_block,
-            "before": before_block,
-        }
+        recalibrated_block = _bootstrap_metrics(y_eval, p_recal_eval, seed=site_seed_base + 200)
+        recal_intercept, recal_slope = calibration_in_the_large(y_eval, p_recal_eval)
+        recalibrated_block["calibration_intercept"] = recal_intercept
+        recalibrated_block["calibration_slope"] = recal_slope
 
         sites_out[site] = {
             "n": n,
             "n_positive": n_positive,
             "prevalence": n_positive / n,
+            "n_calibration": int(len(cal_idx)),
+            "n_evaluation": int(len(eval_idx)),
+            "fitted_intercept": fitted_intercept,
+            "naive_all_rows": naive_all_rows_block,
             "naive": naive_block,
             "recalibrated": recalibrated_block,
         }

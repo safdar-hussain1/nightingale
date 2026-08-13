@@ -89,27 +89,36 @@ def _plot_external_validation(result: dict) -> Path:
     fig, (ax_auc, ax_ece) = plt.subplots(1, 2, figsize=(11.5, 4.6), dpi=150)
 
     # --- Left: naive transfer ROC-AUC per site, with bootstrap CI --------
-    auc_point = [result["sites"][s]["naive"]["roc_auc"][0] for s in sites]
-    auc_lo = [result["sites"][s]["naive"]["roc_auc"][1] for s in sites]
-    auc_hi = [result["sites"][s]["naive"]["roc_auc"][2] for s in sites]
+    # Uses "naive_all_rows" (the whole site, zero site-local adjustment) --
+    # the headline "what does zero-effort deployment look like" number.
+    # AUC is identical on the 70% subset (see the right panel's before/after
+    # invariance), so either would show the same shape; naive_all_rows uses
+    # every row the site has, for the tightest CI this study can report.
+    auc_point = [result["sites"][s]["naive_all_rows"]["roc_auc"][0] for s in sites]
+    auc_lo = [result["sites"][s]["naive_all_rows"]["roc_auc"][1] for s in sites]
+    auc_hi = [result["sites"][s]["naive_all_rows"]["roc_auc"][2] for s in sites]
     auc_err = np.array([[p - lo, hi - p] for p, lo, hi in zip(auc_point, auc_lo, auc_hi)]).T
 
     ax_auc.axhline(0.5, linestyle="--", linewidth=1.2, color=_COLOR_NEUTRAL, label="Chance (0.5)")
     ax_auc.errorbar(
         x, auc_point, yerr=auc_err, fmt="o", markersize=8, color=_COLOR_MODEL,
-        ecolor=_COLOR_MODEL, elinewidth=1.8, capsize=5, label="Naive transfer AUC",
+        ecolor=_COLOR_MODEL, elinewidth=1.8, capsize=5, label="Naive transfer AUC (all rows)",
     )
     ax_auc.set_xticks(x)
     ax_auc.set_xticklabels([_SITE_DISPLAY[s] for s in sites])
     ax_auc.set_ylim(0.3, 1.0)
     ax_auc.set_ylabel("ROC-AUC (95% CI)")
-    ax_auc.set_title("Naive transfer discrimination\n(Cleveland-trained model, unseen site)")
+    ax_auc.set_title("Naive transfer discrimination\n(Cleveland-trained model, unseen site, all rows)")
     ax_auc.legend(loc="lower left", frameon=False, fontsize=8.5)
 
     # --- Right: ECE before vs. after intercept recalibration, same 70% --
-    ece_before = [result["sites"][s]["recalibrated"]["before"]["ece"][0] for s in sites]
-    ece_before_lo = [result["sites"][s]["recalibrated"]["before"]["ece"][1] for s in sites]
-    ece_before_hi = [result["sites"][s]["recalibrated"]["before"]["ece"][2] for s in sites]
+    # "naive" and "recalibrated" are the like-for-like pair: identical
+    # n_evaluation rows, only the probabilities differ (see
+    # nightingale.external.transfer_study's docstring for why this schema
+    # -- direct siblings, not one nested under the other -- is load-bearing).
+    ece_before = [result["sites"][s]["naive"]["ece"][0] for s in sites]
+    ece_before_lo = [result["sites"][s]["naive"]["ece"][1] for s in sites]
+    ece_before_hi = [result["sites"][s]["naive"]["ece"][2] for s in sites]
     ece_after = [result["sites"][s]["recalibrated"]["ece"][0] for s in sites]
     ece_after_lo = [result["sites"][s]["recalibrated"]["ece"][1] for s in sites]
     ece_after_hi = [result["sites"][s]["recalibrated"]["ece"][2] for s in sites]
@@ -165,22 +174,22 @@ def main() -> None:
 
     for site in TARGET_SITES:
         block = result["sites"][site]
+        all_rows = block["naive_all_rows"]
         naive = block["naive"]
         recal = block["recalibrated"]
-        before = recal["before"]
         print(
             f"  {site}: n={block['n']} prevalence={block['prevalence']:.4f}  "
-            f"naive_roc_auc={naive['roc_auc'][0]:.4f} "
-            f"[{naive['roc_auc'][1]:.4f}, {naive['roc_auc'][2]:.4f}]  "
-            f"naive_cal_intercept={naive['calibration_intercept']:.4f}  "
-            f"naive_cal_slope={naive['calibration_slope']:.4f}",
+            f"naive_all_rows_roc_auc={all_rows['roc_auc'][0]:.4f} "
+            f"[{all_rows['roc_auc'][1]:.4f}, {all_rows['roc_auc'][2]:.4f}]  "
+            f"naive_all_rows_cal_intercept={all_rows['calibration_intercept']:.4f}  "
+            f"naive_all_rows_cal_slope={all_rows['calibration_slope']:.4f}",
             flush=True,
         )
         print(
-            f"    recalibration: n_cal={recal['n_calibration']} n_eval={recal['n_evaluation']} "
-            f"fitted_intercept={recal['fitted_intercept']:.4f}  "
-            f"ece_before={before['ece'][0]:.4f} ece_after={recal['ece'][0]:.4f}  "
-            f"roc_auc_before={before['roc_auc'][0]:.4f} roc_auc_after={recal['roc_auc'][0]:.4f} "
+            f"    recalibration (like-for-like, n_cal={block['n_calibration']} "
+            f"n_eval={block['n_evaluation']}): fitted_intercept={block['fitted_intercept']:.4f}  "
+            f"ece_naive={naive['ece'][0]:.4f} ece_recalibrated={recal['ece'][0]:.4f}  "
+            f"roc_auc_naive={naive['roc_auc'][0]:.4f} roc_auc_recalibrated={recal['roc_auc'][0]:.4f} "
             f"(must match -- AUC is recalibration-invariant)",
             flush=True,
         )

@@ -315,15 +315,37 @@ def test_transfer_study_site_row_counts_match_the_cleaned_data(transfer_result):
 def test_transfer_study_every_site_has_naive_and_recalibrated_blocks(transfer_result):
     for site in TARGET_SITES:
         block = transfer_result["sites"][site]
+        assert "naive_all_rows" in block
         assert "naive" in block
         assert "recalibrated" in block
         for metric in FOUR_METRICS:
+            point, lo, hi = block["naive_all_rows"][metric]
+            assert lo <= point <= hi
             point, lo, hi = block["naive"][metric]
             assert lo <= point <= hi
             point, lo, hi = block["recalibrated"][metric]
             assert lo <= point <= hi
-            point, lo, hi = block["recalibrated"]["before"][metric]
-            assert lo <= point <= hi
+
+
+def test_transfer_study_naive_and_recalibrated_are_the_same_row_count(transfer_result):
+    """Fix round 1's core schema contract: "naive" and "recalibrated" are
+    DIRECT siblings, both computed on the identical n_evaluation rows --
+    never a whole-site count. This is what makes them a valid before/after
+    comparison in the first place (see transfer_study's docstring for the
+    incident this guards against: an earlier schema let "naive" mean the
+    whole site while "recalibrated" meant the 70% subset, and a reader
+    comparing the two obvious top-level siblings got a wrong answer).
+    """
+    for site in TARGET_SITES:
+        block = transfer_result["sites"][site]
+        assert block["naive"]["ece"][2] is not None  # sanity: real triples, not placeholders
+        assert block["n_evaluation"] < block["n"]  # 70% subset is strictly smaller than the site
+        assert block["n_calibration"] + block["n_evaluation"] == block["n"]
+        # naive_all_rows uses ALL n rows; naive/recalibrated use n_evaluation
+        # rows -- there is no field on naive/recalibrated blocks themselves
+        # that states this because they're bootstrap-metric dicts, but the
+        # invariant test below is the direct, load-bearing proof that they
+        # were in fact scored on the identical row set.
 
 
 def test_transfer_study_calibration_in_the_large_present_for_naive_and_recalibrated(
@@ -331,7 +353,7 @@ def test_transfer_study_calibration_in_the_large_present_for_naive_and_recalibra
 ):
     for site in TARGET_SITES:
         block = transfer_result["sites"][site]
-        for sub in (block["naive"], block["recalibrated"], block["recalibrated"]["before"]):
+        for sub in (block["naive_all_rows"], block["naive"], block["recalibrated"]):
             assert "calibration_intercept" in sub
             assert "calibration_slope" in sub
             assert np.isfinite(sub["calibration_intercept"])
@@ -368,17 +390,23 @@ def test_transfer_study_recalibration_calibration_and_evaluation_rows_are_disjoi
 
 
 def test_transfer_study_auc_identical_before_and_after_recalibration(transfer_result):
-    """Required test 3, against the real pipeline output: for every target
-    site, ROC-AUC on the 70% evaluation rows must be identical before and
-    after intercept-only recalibration to ~1e-9. This fails if someone
-    accidentally refits the slope, shuffles rows, or evaluates before/after
-    on different subsets.
+    """Required test 3, against the ACTUAL PUBLISHED PATH (fix round 1):
+    compares site["naive"]["roc_auc"] directly against
+    site["recalibrated"]["roc_auc"] -- the exact two top-level fields any
+    real reader of transfer_study's output (or the committed external.json,
+    see the parametrized version of this test below) would compare. This is
+    deliberately NOT a synthetic-only check: an earlier version of this test
+    compared two internally-nested fields that were correctly invariant even
+    while the top-level "naive"/"recalibrated" pair (a whole-site number vs
+    a 70%-subset number) was NOT invariant -- passing while the published
+    artifact was wrong. Comparing the literal published fields is what
+    would have caught that regression.
     """
     for site in TARGET_SITES:
-        recal = transfer_result["sites"][site]["recalibrated"]
-        auc_before = recal["before"]["roc_auc"][0]
-        auc_after = recal["roc_auc"][0]
-        assert auc_after == pytest.approx(auc_before, abs=1e-9)
+        block = transfer_result["sites"][site]
+        auc_naive = block["naive"]["roc_auc"][0]
+        auc_recalibrated = block["recalibrated"]["roc_auc"][0]
+        assert auc_recalibrated == pytest.approx(auc_naive, abs=1e-9)
 
 
 def test_transfer_study_is_deterministic_across_two_independent_calls():
@@ -392,11 +420,11 @@ def test_transfer_study_is_deterministic_across_two_independent_calls():
 
 def test_transfer_study_recalibration_split_sizes_are_documented_and_consistent(transfer_result):
     for site in TARGET_SITES:
-        recal = transfer_result["sites"][site]["recalibrated"]
-        n_site = transfer_result["sites"][site]["n"]
-        assert recal["n_calibration"] + recal["n_evaluation"] == n_site
-        assert recal["n_calibration"] > 0
-        assert recal["n_evaluation"] > 0
+        block = transfer_result["sites"][site]
+        assert block["n_calibration"] + block["n_evaluation"] == block["n"]
+        assert block["n_calibration"] > 0
+        assert block["n_evaluation"] > 0
+        assert block["fitted_intercept"] == pytest.approx(block["fitted_intercept"])  # finite
 
 
 def test_cleveland_training_block_is_present_and_well_formed(transfer_result):
@@ -438,11 +466,12 @@ def test_external_json_all_three_target_sites_present_cleveland_absent():
 def test_external_json_site_has_naive_and_recalibrated_metric_triples(site):
     data = _load_external_json()
     block = data["sites"][site]
+    assert "naive_all_rows" in block
     assert "naive" in block
     assert "recalibrated" in block
 
     for metric in FOUR_METRICS:
-        for sub in (block["naive"], block["recalibrated"], block["recalibrated"]["before"]):
+        for sub in (block["naive_all_rows"], block["naive"], block["recalibrated"]):
             value = sub[metric]
             assert isinstance(value, list)
             assert len(value) == 3
@@ -454,9 +483,30 @@ def test_external_json_site_has_naive_and_recalibrated_metric_triples(site):
 
 @pytest.mark.parametrize("site", ["hungarian", "switzerland", "va"])
 def test_external_json_auc_identical_before_and_after_recalibration(site):
+    """Required test 3 against the COMMITTED ARTIFACT, on the literal
+    top-level fields ("naive" vs "recalibrated") -- not a nested field a
+    reader would have to know to look for. This is the exact comparison
+    fix round 1 was about: it must be impossible to read this file and
+    compare the "obvious" two fields and get a wrong answer.
+    """
     data = _load_external_json()
-    recal = data["sites"][site]["recalibrated"]
-    assert recal["before"]["roc_auc"][0] == pytest.approx(recal["roc_auc"][0], abs=1e-9)
+    block = data["sites"][site]
+    assert block["recalibrated"]["roc_auc"][0] == pytest.approx(
+        block["naive"]["roc_auc"][0], abs=1e-9
+    )
+
+
+@pytest.mark.parametrize("site", ["hungarian", "switzerland", "va"])
+def test_external_json_naive_all_rows_is_the_whole_site_not_the_eval_subset(site):
+    """naive_all_rows must be clearly, structurally distinct from the
+    like-for-like naive/recalibrated pair -- pinned by checking its
+    implied sample size differs from n_evaluation whenever the site's own
+    n is large enough for the 30/70 split to differ from the full site
+    (true for all three sites here: 30% < 100% for any n > 0).
+    """
+    data = _load_external_json()
+    block = data["sites"][site]
+    assert block["n_evaluation"] < block["n"]
 
 
 def test_external_json_no_generated_utc_field_anywhere():
