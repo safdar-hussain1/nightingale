@@ -7,7 +7,7 @@ name = "nightingale"
 version = "1.0.0"
 description = "Calibrated clinical risk models for six conditions, with browser-side inference and provenance verification"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Safdar Hussain" }]
 dependencies = [

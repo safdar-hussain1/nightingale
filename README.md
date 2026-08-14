@@ -79,7 +79,10 @@ The heart-disease cohort is four hospitals in one file — Cleveland, Hungary,
 Switzerland, VA Long Beach — with prevalence from 36.1% to 93.5%. That makes it
 a real external-validation bench, so the study trains on **Cleveland only**
 (303 rows, the highest-quality site) and deploys that model, unmodified, at the
-three hospitals it never saw.
+three hospitals it never saw. **Heart disease is the only one of the six
+conditions with any external validation at all** — the other five were each
+trained and evaluated within a single cohort, and nothing here establishes that
+they would transfer anywhere.
 
 **Zero-effort deployment, whole site, no site-local data at all:**
 
@@ -119,14 +122,15 @@ cleaning.
 from the 1.0 that Hungary (0.958) and Switzerland (0.962) sit near — VA's
 problem is not a prevalence shift but a risk gradient that is too steep for how
 its outcomes are actually distributed. Intercept-only recalibration can correct
-a shift, not a slope, so it does not help here: ECE goes 0.0697 → 0.0918, and
-Brier is flat (0.158 → 0.162). The intervals overlap heavily at n = 140, so the
+a shift, not a slope, so it does not help here: on the matched 140 evaluation
+rows, ECE goes 0.0697 → 0.0918 and Brier is flat (0.158 → 0.162), while the
+0.478 slope above is the whole-site figure. The intervals overlap heavily, so the
 honest statement is "recalibration did not demonstrably help VA", not
 "recalibration hurt VA". It is published as measured either way.
 
 ## Quickstart
 
-Requires Python 3.10+.
+Requires Python 3.12+.
 
 ```bash
 git clone https://github.com/safdar-hussain1/nightingale.git
@@ -252,7 +256,7 @@ close, so no model was traded down for size:
 | cervical-cancer | 100 | 1,600 | 96,935 B | 15,330 B | 5.0% |
 | diabetes | 300 | 2,100 | 130,921 B | 21,459 B | 7.0% |
 | heart-disease | 100 | 700 | 44,257 B | 7,903 B | 2.6% |
-| kidney-disease | 100 | 638 | 43,267 B | 7,220 B | 2.3% |
+| kidney-disease | 100 | 638 | 43,267 B | 7,220 B | 2.4% |
 | liver-disease | 100 | 620 | 38,911 B | 6,720 B | 2.2% |
 
 All six together are 76,528 B gzipped. The whole dashboard, models inlined, is
@@ -268,7 +272,7 @@ nightingale verify
 OK: data/cleaned/breast-cancer.csv.gz
 OK: data/cleaned/cervical-cancer.csv.gz
 ...
-OK: reports/figures/liver-disease-decision-curve.png
+OK: reports/figures/liver-disease-reliability.png
 signature: valid
 OK
 ```

@@ -90,21 +90,67 @@ def test_honesty_banner_is_present_verbatim(path: Path):
     )
 
 
-def _readme_condition_table() -> dict[str, str]:
-    """Parse the README's six-condition table -> {slug: printed ROC-AUC point}."""
-    printed: dict[str, str] = {}
+# The README's transfer-study table names each unseen hospital in prose; these
+# are the keys the same site carries in models/heart-disease/external.json.
+SITE_LABEL_TO_KEY = {
+    "Hungary": "hungarian",
+    "Switzerland": "switzerland",
+    "VA Long Beach": "va",
+}
+
+# `point [lo, hi]` as the README prints every interval. Bold markers around a
+# cell are stripped before matching, so **0.0466 [0.0282, 0.1028]** parses too.
+METRIC_RE = re.compile(r"(\d+\.\d+) \[(\d+\.\d+), (\d+\.\d+)\]")
+
+
+def _table_rows(n_cells: int) -> list[list[str]]:
+    """Every README table row with exactly ``n_cells`` cells, bold stripped."""
+    rows = []
     for line in README.read_text(encoding="utf-8").splitlines():
         if not line.startswith("|"):
             continue
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if len(cells) != 5:
-            continue
+        cells = [c.strip().replace("**", "") for c in line.strip().strip("|").split("|")]
+        if len(cells) == n_cells:
+            rows.append(cells)
+    return rows
+
+
+def _assert_printed_matches(printed: str, actual: float, what: str) -> None:
+    """The printed string must equal ``actual`` rounded to its own precision."""
+    places = len(printed.split(".")[1])
+    rounded = f"{actual:.{places}f}"
+    assert Decimal(printed) == Decimal(rounded), (
+        f"README prints {what} = {printed}, but the artifact holds {actual!r} "
+        f"(which rounds to {rounded} at {places} places)"
+    )
+
+
+def _readme_condition_table() -> dict[str, tuple[str, str, str]]:
+    """Parse the six-condition table -> {slug: (point, lo, hi) as printed}."""
+    printed: dict[str, tuple[str, str, str]] = {}
+    for cells in _table_rows(5):
         slug = UCI_ID_TO_SLUG.get(cells[1])
         if slug is None:
             continue
-        match = re.fullmatch(r"(\d\.\d+) \[\d\.\d+, \d\.\d+\]", cells[4])
+        match = METRIC_RE.fullmatch(cells[4])
         assert match, f"malformed ROC-AUC cell for {slug}: {cells[4]!r}"
-        printed[slug] = match.group(1)
+        printed[slug] = match.groups()
+    return printed
+
+
+def _readme_transfer_table() -> dict[str, tuple[tuple[str, ...], tuple[str, ...]]]:
+    """Parse the recalibration table -> {site key: (naive ECE, recal ECE)}."""
+    printed: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {}
+    for cells in _table_rows(5):
+        key = SITE_LABEL_TO_KEY.get(cells[0])
+        if key is None or "→" not in cells[3]:
+            continue
+        found = METRIC_RE.findall(cells[3])
+        assert len(found) == 2, (
+            f"the ECE naive -> recalibrated cell for {key} must print two "
+            f"intervals, got {cells[3]!r}"
+        )
+        printed[key] = (found[0], found[1])
     return printed
 
 
@@ -114,17 +160,39 @@ def test_readme_condition_table_covers_all_six_conditions():
 
 @pytest.mark.parametrize("slug", sorted(UCI_ID_TO_SLUG.values()))
 def test_readme_roc_auc_matches_metrics_json_to_printed_precision(slug: str):
-    printed = _readme_condition_table()[slug]
+    point, lo, hi = _readme_condition_table()[slug]
     metrics = json.loads(
         (REPO_ROOT / "models" / slug / "metrics.json").read_text(encoding="utf-8")
     )
-    actual = metrics["roc_auc"][0]
-    places = len(printed.split(".")[1])
-    rounded = f"{actual:.{places}f}"
-    assert Decimal(printed) == Decimal(rounded), (
-        f"README prints ROC-AUC {printed} for {slug}, but metrics.json holds "
-        f"{actual!r} (which rounds to {rounded})"
+    actual_point, actual_lo, actual_hi = metrics["roc_auc"]
+    # Both bounds, not only the point -- an interval quoted from the wrong run
+    # is exactly as wrong as a point estimate quoted from one.
+    _assert_printed_matches(point, actual_point, f"{slug} ROC-AUC point")
+    _assert_printed_matches(lo, actual_lo, f"{slug} ROC-AUC CI lower bound")
+    _assert_printed_matches(hi, actual_hi, f"{slug} ROC-AUC CI upper bound")
+
+
+def test_readme_transfer_table_covers_all_three_unseen_sites():
+    assert set(_readme_transfer_table()) == set(SITE_LABEL_TO_KEY.values())
+
+
+@pytest.mark.parametrize("site", sorted(SITE_LABEL_TO_KEY.values()))
+@pytest.mark.parametrize("block", ("naive", "recalibrated"))
+def test_readme_transfer_ece_matches_external_json(site: str, block: str):
+    external = json.loads(
+        (REPO_ROOT / "models" / "heart-disease" / "external.json").read_text(
+            encoding="utf-8"
+        )
     )
+    actual = external["sites"][site][block]["ece"]
+    naive_printed, recal_printed = _readme_transfer_table()[site]
+    printed = naive_printed if block == "naive" else recal_printed
+    for label, printed_value, actual_value in zip(
+        ("point", "CI lower bound", "CI upper bound"), printed, actual
+    ):
+        _assert_printed_matches(
+            printed_value, actual_value, f"{site} {block} ECE {label}"
+        )
 
 
 def test_readme_embeds_the_dashboard_screenshot_and_it_exists():

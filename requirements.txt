@@ -1,5 +1,7 @@
-# Prefer `pip install -e ".[dev]"`; this file mirrors pyproject dependencies,
-# pinned to exact versions from the development environment.
+# Install this file FIRST, then `pip install -e ".[dev]"` -- pip then resolves
+# these exact versions rather than the looser floors in pyproject.toml, and the
+# published numbers reproduce. This file mirrors pyproject's dependencies,
+# pinned to the development environment. Requires Python 3.12+.
 pandas==3.0.3
 numpy==2.5.1
 scikit-learn==1.9.0
