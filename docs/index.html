@@ -245,6 +245,18 @@ table.plate-table tbody tr:hover td { background: var(--plate-2); }
 .ledger .cond-name { font-family: var(--display); font-size: 1.06rem; }
 .ledger .cond-src { display: block; font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.1em; color: var(--ink-3); }
 .ci-glyph { display: block; margin-left: auto; }
+/* Column order is a priority order: the claim this whole page is making is
+   "no number without its interval", so name, ROC-AUC and the interval sit at
+   the left and are what survives on a phone. The cohort counts are context
+   and are the part that scrolls off. */
+@media (max-width: 560px) {
+  table.plate-table { min-width: 540px; font-size: 0.86rem; }
+  table.plate-table th + th, table.plate-table td + td { padding-left: 0.85rem; }
+  /* Wide enough that the condition name breaks over two lines, not five,
+     while name + AUC + interval still land inside a 390px viewport. */
+  table.plate-table td:first-child, table.plate-table th:first-child { min-width: 138px; }
+  .ledger .cond-name { font-size: 0.98rem; }
+}
 
 /* --------------------------------------------------------------- section */
 section { padding: clamp(4rem, 9vw, 7.5rem) 0 0; }
@@ -310,6 +322,16 @@ section { padding: clamp(4rem, 9vw, 7.5rem) 0 0; }
 
 .result { position: sticky; top: 68px; background: var(--plate-2); border: 1px solid var(--rule); padding: 1.4rem; }
 .result .risk { font-family: var(--display); font-size: clamp(3.2rem, 7vw, 4.6rem); line-height: 0.95; letter-spacing: -0.03em; }
+/* Where the numeral would have been on an untouched form. Body size, not
+   caption size: this is the answer, so it is set to be read. */
+.risk-blank {
+  margin: 0.5rem 0 0; font-size: 0.98rem; line-height: 1.62; color: var(--ink-2);
+  border-left: 3px solid var(--ink-3); padding-left: 1rem;
+}
+.risk-blank .lead {
+  display: block; font-family: var(--display); font-size: clamp(1.6rem, 3.4vw, 2.1rem);
+  line-height: 1.08; color: var(--ink); margin-bottom: 0.55rem; letter-spacing: -0.01em;
+}
 .risk-bar { position: relative; height: 10px; background: var(--plate-3); border: 1px solid var(--rule); margin: 0.9rem 0 0.4rem; }
 .risk-bar .fill { position: absolute; inset: 0 auto 0 0; background: var(--rose); }
 .risk-bar .prev { position: absolute; top: -4px; bottom: -4px; width: 1px; background: var(--ink); }
@@ -359,6 +381,34 @@ section { padding: clamp(4rem, 9vw, 7.5rem) 0 0; }
 #coxcomb-svg .tick { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; fill: var(--ink-2);
   stroke: var(--plate); stroke-width: 3px; paint-order: stroke fill; }
 #coxcomb-svg .truncated path { stroke-dasharray: 2 3; }
+#coxcomb-svg .wedge-key { display: none; pointer-events: none; }
+#coxcomb-svg .wedge-key circle { fill: var(--ink); stroke: var(--plate); stroke-width: 2; }
+#coxcomb-svg .wedge-key text {
+  font-family: var(--mono); font-size: 25px; fill: var(--plate);
+  text-anchor: middle; dominant-baseline: central;
+}
+/* Below ~560px the plate is drawn about 0.65× and anything set at 13px in
+   user units lands at 8px on glass. Rather than shrink the type past reading,
+   the external labels and ring ticks come off, each wedge is keyed with a
+   numeral large enough to survive the scale, and the names move into a legend
+   under the plate where they are set at real body size. */
+.coxcomb-key { display: none; list-style: none; margin: 1.1rem 0 0; padding: 0; }
+.coxcomb-key li {
+  display: grid; grid-template-columns: 1.5rem 1fr; gap: 0.6rem; align-items: baseline;
+  padding: 0.42rem 0; border-top: 1px solid var(--rule-soft); font-size: 0.86rem;
+}
+.coxcomb-key .key-n {
+  font-family: var(--mono); font-size: 0.72rem; text-align: center; color: var(--plate);
+  background: var(--ink); border-radius: 2px; padding: 0.12rem 0;
+}
+.coxcomb-key .key-sub {
+  display: block; font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.08em; color: var(--ink-3);
+}
+@media (max-width: 560px) {
+  #coxcomb-svg .lbl, #coxcomb-svg .lbl-sub, #coxcomb-svg .tick, #coxcomb-svg .leader { display: none; }
+  #coxcomb-svg .wedge-key { display: block; }
+  .coxcomb-key { display: block; }
+}
 
 @media (prefers-reduced-motion: no-preference) {
   #coxcomb-svg .wedge { animation: bloom 620ms cubic-bezier(0.22, 0.8, 0.3, 1) backwards; transform-origin: 0 0; }
@@ -491,17 +541,17 @@ pre.cmd {
           <thead>
             <tr>
               <th scope="col">Condition</th>
+              <th scope="col">ROC-AUC</th>
+              <th scope="col">95% interval</th>
               <th scope="col">Cohort</th>
               <th scope="col">Positives</th>
               <th scope="col">Prevalence</th>
-              <th scope="col">ROC-AUC</th>
-              <th scope="col">95% interval</th>
             </tr>
           </thead>
           <tbody></tbody>
         </table>
       </div>
-      <p class="caption">Every figure on this page is read out of a signed artifact at build time. The bar in the last column is the bootstrap interval on the point estimate beside it, drawn on a common 0.5–1.0 scale so the widths are comparable across conditions.</p>
+      <p class="caption">Every figure on this page is read out of a signed artifact at build time. The bar in the interval column is the bootstrap interval on the ROC-AUC beside it, drawn on a common 0.5–1.0 scale so the widths are comparable across conditions. Name, ROC-AUC and interval are held at the left; on a narrow screen the cohort counts scroll.</p>
     </div>
   </div>
 </header>
@@ -555,6 +605,7 @@ pre.cmd {
       <div class="coxcomb-layout">
         <div>
           <svg id="coxcomb-svg" viewBox="-410 -330 820 660" role="img" aria-labelledby="coxcomb-title"></svg>
+          <ol class="coxcomb-key" id="coxcomb-key"></ol>
         </div>
         <div>
           <div class="detail-card" id="coxcomb-detail"></div>
@@ -1074,9 +1125,6 @@ function effectiveTheme() {
     name.innerHTML = '<span class="cond-name">' + esc(c.display) + '</span>' +
       '<span class="cond-src">' + esc(c.source) + ' · positive = ' + esc(c.positive_meaning) + '</span>';
     row.appendChild(name);
-    row.appendChild(el('td', 'num', count(c.n)));
-    row.appendChild(el('td', 'num', count(c.n_positive)));
-    row.appendChild(el('td', 'num', pct(c.prevalence)));
     row.appendChild(el('td', 'num', fixed(c.roc_auc[0], 3)));
 
     var glyphCell = el('td');
@@ -1090,6 +1138,9 @@ function effectiveTheme() {
       '<circle cx="' + mid.toFixed(1) + '" cy="8" r="3" fill="var(--ink)"/></svg>' +
       '<span class="cond-src">' + fixed(c.roc_auc[1], 3) + '–' + fixed(c.roc_auc[2], 3) + '</span>';
     row.appendChild(glyphCell);
+    row.appendChild(el('td', 'num', count(c.n)));
+    row.appendChild(el('td', 'num', count(c.n_positive)));
+    row.appendChild(el('td', 'num', pct(c.prevalence)));
     body.appendChild(row);
   });
 
@@ -1224,23 +1275,46 @@ function score() {
   var host = $('calc-result');
   host.innerHTML = '';
 
-  host.appendChild(el('span', 'eyebrow', supplied ? 'Calibrated risk' : 'Calibrated risk · nothing measured'));
-  host.appendChild(el('div', 'risk num', pct(out.p_cal, 1)));
-
-  /* An untouched form is not a neutral starting point. Every feature is
-     routing down its missing branch, and the number that comes back is
-     whatever those branches happen to add up to -- which is worth saying out
-     loud, because a large figure sitting above an empty form reads like a
-     verdict on a patient rather than a property of the model. */
-  if (!supplied) {
-    var blankNote = el('div', 'note');
-    blankNote.style.borderLeftColor = 'var(--ink)';
-    blankNote.style.background = 'transparent';
-    blankNote.style.paddingLeft = '0.9rem';
-    blankNote.textContent = 'No field has been filled in, so every feature is taking its missing branch. ' +
-      'This figure is what those branches sum to — it is not a prior, not the cohort rate, and not about anyone. Fill a field in and watch it move.';
-    host.appendChild(blankNote);
+  /* An untouched form is not a neutral starting point, and it is not a
+     patient. Every feature routes down the branch the model uses when a value
+     is absent; on most of these cohorts those branches lean the same way, so
+     the sum saturates and the page would answer an empty form with a large
+     numeral, a full bar and a positive conformal verdict. That is a property
+     of missing-value routing being read as a finding about someone. So the
+     estimate, the bar and the verdict are withheld until at least one field
+     is supplied, and the space they would occupy says why. */
+  if (supplied === 0) {
+    host.appendChild(el('span', 'eyebrow', 'Nothing measured yet'));
+    var blank = el('div', 'risk-blank');
+    blank.appendChild(el('span', 'lead', 'No estimate yet'));
+    blank.appendChild(el('span', null,
+      'Every field is empty, so every feature would route down the branch this model uses for a ' +
+      'missing value. Those branches mostly lean one way, the leaning compounds across ' +
+      condition.features.length + ' features, and the figure that falls out the end saturates — it is an ' +
+      'artefact of asking with nothing measured, not a risk, and not about anyone. ' +
+      'Enter whatever has actually been measured and the estimate, its interval on the cohort ' +
+      'rate, and the conformal verdict appear below.'));
+    host.appendChild(blank);
+    var blankKv = el('dl', 'kv');
+    [
+      ['Calibrator', condition.cv.calibration_method],
+      ['Conformal q̂ (α = ' + fixed(condition.conformal.alpha, 2) + ')', fixed(condition.conformal.q_hat, 4)],
+      ['Fields supplied', '0 of ' + condition.features.length]
+    ].forEach(function (pair) {
+      blankKv.appendChild(el('dt', null, pair[0]));
+      blankKv.appendChild(el('dd', 'num', pair[1]));
+    });
+    host.appendChild(blankKv);
+    condition.notes.forEach(function (text) {
+      var blankNote = el('div', 'note');
+      blankNote.appendChild(el('span', null, text));
+      host.appendChild(blankNote);
+    });
+    return;
   }
+
+  host.appendChild(el('span', 'eyebrow', 'Calibrated risk'));
+  host.appendChild(el('div', 'risk num', pct(out.p_cal, 1)));
 
   var bar = el('div', 'risk-bar');
   var fill = el('div', 'fill');
@@ -1278,9 +1352,7 @@ function score() {
 
   var contrib = el('div', 'contrib');
   contrib.appendChild(el('span', 'eyebrow', 'What changes if this field is unknown'));
-  if (!supplied) {
-    contrib.appendChild(el('p', 'caption', 'Every field is blank, so this estimate is the model’s answer for a patient with nothing measured. Fill one in to see how far it moves.'));
-  } else if (!contributions.length) {
+  if (!contributions.length) {
     contrib.appendChild(el('p', 'caption', 'None of the ' + supplied + ' fields you have filled in moves this estimate by as much as a tenth of a point. ' +
       'With everything else unknown, the model is being carried by its missing branches, not by what you measured.'));
   } else {
@@ -1430,6 +1502,27 @@ function rampIndex(auc) {
     sub.textContent = count(condition.n) + ' · AUC ' + fixed(condition.roc_auc[0], 3) + (truncated ? ' · arc cut' : '');
     svg.appendChild(sub);
 
+    /* The numeral that keys this wedge to the legend on a narrow screen. It
+       sits inside the ink so it needs no leader, and it is set large enough
+       in user units to survive the plate being drawn at about two-thirds. */
+    var keyAt = point(Math.max(drawn * 0.62, 46), mid);
+    var keyMark = node('g', { class: 'wedge-key' });
+    keyMark.appendChild(node('circle', { cx: keyAt[0].toFixed(1), cy: keyAt[1].toFixed(1), r: 21 }));
+    var keyText = node('text', { x: keyAt[0].toFixed(1), y: keyAt[1].toFixed(1) });
+    keyText.textContent = String(index + 1);
+    keyMark.appendChild(keyText);
+    group.appendChild(keyMark);
+
+    var item = el('li');
+    var keyNum = el('span', 'key-n', String(index + 1));
+    item.appendChild(keyNum);
+    var text = el('span');
+    text.appendChild(el('span', null, condition.display.replace(/\s*\(.*\)\s*$/, '')));
+    text.appendChild(el('span', 'key-sub',
+      count(condition.n) + ' records · AUC ' + fixed(condition.roc_auc[0], 3) + (truncated ? ' · arc cut at the frame' : '')));
+    item.appendChild(text);
+    $('coxcomb-key').appendChild(item);
+
     var describe = function () { showDetail(condition); };
     group.addEventListener('mouseenter', function () { svg.classList.add('dimmed'); describe(); });
     group.addEventListener('focus', function () { svg.classList.add('dimmed'); describe(); });
@@ -1479,8 +1572,19 @@ function rampIndex(auc) {
         item.factor.toFixed(1) + '× the dashed ring, several screens off the plate, so its arc is cut at the frame and broken to say so.';
     }).join(' ') + ' ';
   }
-  caption += 'Tint is ROC-AUC on a fixed 0.65–1.00 scale, so a wedge keeps its colour no matter which conditions are on the page.';
+  caption += 'Tint is ROC-AUC on a fixed 0.65–1.00 scale, so a wedge keeps its colour no matter which conditions are on the page. ';
+  caption += 'On a narrow screen the wedge names move into the numbered legend below the plate, because type set to fit a phone at this scale would not be type anyone could read.';
   $('coxcomb-caption').textContent = caption;
+
+  /* CSS can hide the labels but it cannot rewrite a viewBox, and once the
+     labels are gone the plate should claim the room they were holding. */
+  var narrow = window.matchMedia('(max-width: 560px)');
+  function fitFrame() {
+    svg.setAttribute('viewBox', narrow.matches ? '-256 -256 512 512' : '-410 -330 820 660');
+  }
+  fitFrame();
+  if (narrow.addEventListener) { narrow.addEventListener('change', fitFrame); }
+  else if (narrow.addListener) { narrow.addListener(fitFrame); }
 })();
 
 /* ------------------------------------------------------------------ *
@@ -1514,7 +1618,10 @@ function svgNode(tag, attrs) {
 /* A minimal cartesian frame: 0–1 or data-ranged axes, hairline grid, ticks. */
 function svgFrame(host, xRange, yRange, xTicks, yTicks, xLabel, yLabel) {
   host.innerHTML = '';
-  var W = 480, H = 300, L = 52, R = 12, T = 14, B = 40;
+  /* B leaves room for two stacked rows below the axis: the tick labels, then
+     the axis title. At 40 the centre tick sat directly on top of the title
+     wherever a tick lands mid-axis, which on the net-benefit plate is 0.50. */
+  var W = 480, H = 312, L = 52, R = 12, T = 14, B = 54;
   var svg = svgNode('svg', { viewBox: '0 0 ' + W + ' ' + H, preserveAspectRatio: 'none' });
   svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   var sx = function (v) { return L + (v - xRange[0]) / (xRange[1] - xRange[0]) * (W - L - R); };
@@ -1540,8 +1647,25 @@ function svgFrame(host, xRange, yRange, xTicks, yTicks, xLabel, yLabel) {
   yt.textContent = yLabel;
   svg.appendChild(yt);
 
+  /* Everything drawn from data goes inside a clipped group. A decision curve
+     that runs off the bottom of its range would otherwise be drawn straight
+     through the tick labels and the axis title, which is how the treat-all
+     line came to be crossing out the word "probability". The 5-unit bleed
+     leaves room for a mark sitting exactly on a range boundary. */
+  var pad = 5;
+  var clipId = 'plotclip-' + (svgFrame.seq = (svgFrame.seq || 0) + 1);
+  var defs = svgNode('defs', {});
+  var clip = svgNode('clipPath', { id: clipId });
+  clip.appendChild(svgNode('rect', {
+    x: L - pad, y: T - pad, width: W - L - R + pad * 2, height: H - T - B + pad * 2
+  }));
+  defs.appendChild(clip);
+  svg.insertBefore(defs, svg.firstChild);
+  var plot = svgNode('g', { 'clip-path': 'url(#' + clipId + ')' });
+  svg.appendChild(plot);
+
   host.appendChild(svg);
-  return { svg: svg, sx: sx, sy: sy };
+  return { svg: svg, plot: plot, sx: sx, sy: sy };
 }
 
 function svgPath(frame, points, stroke, dash, width) {
@@ -1550,7 +1674,7 @@ function svgPath(frame, points, stroke, dash, width) {
   }).join(' ');
   var path = svgNode('path', { d: d, fill: 'none', stroke: stroke, 'stroke-width': width || 2, 'stroke-linejoin': 'round' });
   if (dash) { path.setAttribute('stroke-dasharray', dash); }
-  frame.svg.appendChild(path);
+  frame.plot.appendChild(path);
 }
 
 /* ------------------------------------------------------------------ *
@@ -1633,7 +1757,7 @@ function drawReliability() {
     svgPath(frame, [[0, 0], [1, 1]], 'var(--ink-3)', '4 4', 1);
     svgPath(frame, points, 'var(--rose)', null, 2);
     points.forEach(function (p) {
-      frame.svg.appendChild(svgNode('circle', {
+      frame.plot.appendChild(svgNode('circle', {
         cx: frame.sx(p[0]).toFixed(1), cy: frame.sy(p[1]).toFixed(1), r: 4.5,
         fill: 'var(--rose)', stroke: 'var(--plate)', 'stroke-width': 2
       }));
@@ -1708,8 +1832,9 @@ function drawDca() {
     svgPath(frame, none, 'var(--ink-3)', '1 4', 1.5);
     svgPath(frame, all, 'var(--ink-3)', '6 4', 1.5);
     svgPath(frame, model, 'var(--rose)', null, 2);
-    frame.svg.appendChild(svgNode('line', {
-      x1: frame.sx(threshold).toFixed(1), y1: 14, x2: frame.sx(threshold).toFixed(1), y2: 260,
+    frame.plot.appendChild(svgNode('line', {
+      x1: frame.sx(threshold).toFixed(1), y1: frame.sy(yMax).toFixed(1),
+      x2: frame.sx(threshold).toFixed(1), y2: frame.sy(yMin).toFixed(1),
       stroke: 'var(--ink)', 'stroke-width': 1, 'stroke-dasharray': '2 3'
     }));
   }
@@ -1987,7 +2112,7 @@ drawSites();
     'This page deliberately does not print the manifest’s own hash: the page is itself a signed artifact, so signing it changes the manifest, which would change the hash printed here, which would change the page. There is no fixpoint, and a number that is wrong the moment it is signed is worse than none.';
   host.appendChild(note);
 
-  $('colophon-commit').textContent = 'built from ' + prov.commit.slice(0, 12);
+  $('colophon-commit').textContent = 'models exported at commit ' + prov.commit.slice(0, 12);
 })();
 
 /* ------------------------------------------------------------------ *

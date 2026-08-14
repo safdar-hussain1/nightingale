@@ -169,6 +169,73 @@ def test_author_and_repo_credited(html):
     assert "github.com/safdar-hussain1/nightingale" in html
 
 
+def _score_body(html: str) -> str:
+    """The body of the page's ``score()`` function, braces balanced."""
+    start = html.index("function score()")
+    open_brace = html.index("{", start)
+    depth = 0
+    for offset in range(open_brace, len(html)):
+        if html[offset] == "{":
+            depth += 1
+        elif html[offset] == "}":
+            depth -= 1
+            if depth == 0:
+                return html[open_brace + 1 : offset]
+    raise AssertionError("score() is not brace-balanced")
+
+
+def _zero_supplied_branch(html: str) -> tuple[str, str]:
+    """Split ``score()`` into its zero-supplied branch and everything after it."""
+    body = _score_body(html)
+    guard = body.index("if (supplied === 0) {")
+    depth = 0
+    for offset in range(body.index("{", guard), len(body)):
+        if body[offset] == "{":
+            depth += 1
+        elif body[offset] == "}":
+            depth -= 1
+            if depth == 0:
+                return body[guard:offset], body[offset:]
+    raise AssertionError("the zero-supplied branch is not brace-balanced")
+
+
+# Markup the calculator must not emit while nothing has been measured: the
+# numeral, the risk bar, and the conformal verdict chip.
+VERDICT_MARKUP = ("'risk num'", "'risk-bar'", "'chip '")
+
+
+def test_untouched_calculator_withholds_the_verdict(html):
+    """An empty form must not be answered with a risk, a bar or a verdict.
+
+    Left alone, every feature routes down its missing branch and several of
+    these models saturate — one of them to a full bar and a positive conformal
+    set on the very condition whose note says it can never answer "uncertain".
+    That reads as a finding about a patient when it is a property of
+    missing-value routing, so the whole verdict apparatus is withheld until at
+    least one field is supplied.
+
+    The guarantee is proved statically: the zero-supplied branch is an early
+    ``return``, it emits the explanatory note, and every piece of verdict
+    markup lives after it and is therefore unreachable from an empty form.
+    """
+    branch, tail = _zero_supplied_branch(html)
+
+    assert branch.rstrip().endswith("return;"), (
+        "the zero-supplied branch must return, or the verdict below it still runs"
+    )
+    assert "'risk-blank'" in branch, "the blank state must explain itself where the numeral was"
+    for markup in VERDICT_MARKUP:
+        assert markup not in branch, f"{markup} is emitted on an untouched form"
+        assert markup in tail, f"{markup} is not emitted at all — the calculator is broken"
+
+
+def test_blank_state_names_missing_branch_routing(html):
+    """The note has to say *why* the number is withheld, not merely that it is."""
+    branch, _ = _zero_supplied_branch(html)
+    assert "missing value" in branch
+    assert "saturates" in branch
+
+
 # --------------------------------------------------------------------------
 # How the page loads
 # --------------------------------------------------------------------------
