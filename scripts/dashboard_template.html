@@ -1,0 +1,1760 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nightingale — a statistical atlas of six screening models</title>
+<meta name="description" content="Six calibrated clinical screening-triage models, running entirely in your browser, each printed with its uncertainty.">
+<meta name="author" content="Safdar Hussain">
+<meta name="color-scheme" content="light dark">
+
+<script>
+// Theme, decided before the first paint so the page never flashes the wrong
+// plate. An explicit choice -- the ?theme= query or a previous click -- is
+// stamped on <html>; with no explicit choice nothing is stamped and the CSS
+// prefers-color-scheme block governs, which is the honest default.
+(function () {
+  try {
+    var query = new URLSearchParams(location.search).get('theme');
+    var stored = null;
+    try { stored = localStorage.getItem('nightingale-theme'); } catch (e) { stored = null; }
+    var choice = (query === 'light' || query === 'dark') ? query : stored;
+    if (choice === 'light' || choice === 'dark') {
+      document.documentElement.setAttribute('data-theme', choice);
+    }
+  } catch (e) { /* a themeless page is still a readable page */ }
+})();
+</script>
+
+<style>
+/* ------------------------------------------------------------------ *
+ *  Nightingale — the plate
+ *
+ *  Colour is set once, as tokens, and every rule below asks for a role.
+ *  Light is the printed plate: laid paper, printer's ink, madder rose and
+ *  slate blue -- the three inks of Nightingale's own 1858 diagram.
+ *  Dark is the same plate under lamplight, not an inverted screenshot:
+ *  the ramps were re-stepped for the dark surface and re-validated, so the
+ *  wedge that reads strongest is the strongest model in both.
+ * ------------------------------------------------------------------ */
+:root {
+  color-scheme: light;
+
+  --paper: #e8e6de;
+  --plate: #f8f7f3;
+  --plate-2: #f1eee6;
+  --plate-3: #eae6da;
+  --ink: #16161a;
+  --ink-2: #4d4d55;
+  --ink-3: #6b6a70;
+  --rule: #cdc9bd;
+  --rule-soft: #ded9cc;
+  --rose: #bf2f52;
+  --rose-quiet: rgba(191, 47, 82, 0.10);
+  --slate: #2f6fbd;
+  --slate-quiet: rgba(47, 111, 189, 0.10);
+  --grid: #dcd7c9;
+
+  /* Sequential ramp, one hue, light to dark: wedge tint by discrimination.
+     Validated for monotone lightness, step separation and a light end that
+     still clears the plate it sits on. */
+  --ramp-1: #e08fa4;
+  --ramp-2: #d5738d;
+  --ramp-3: #c85674;
+  --ramp-4: #b93a5c;
+  --ramp-5: #9e2848;
+  --ramp-6: #7d1c35;
+
+  --shadow-plate: 0 1px 0 rgba(22, 22, 26, 0.05), 0 18px 40px -32px rgba(22, 22, 26, 0.55);
+
+  --display: Didot, "Bodoni 72", "Hoefler Text", "Playfair Display", "Times New Roman", serif;
+  --body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  --gutter: clamp(1.1rem, 4vw, 3rem);
+  --measure: 1180px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #0d0f13;
+    --plate: #171a20;
+    --plate-2: #1e222a;
+    --plate-3: #232833;
+    --ink: #f1f0ea;
+    --ink-2: #b6b5ae;
+    --ink-3: #918f89;
+    --rule: #2f343d;
+    --rule-soft: #242932;
+    --rose: #dd5c78;
+    --rose-quiet: rgba(221, 92, 120, 0.14);
+    --slate: #5b95d6;
+    --slate-quiet: rgba(91, 149, 214, 0.14);
+    --grid: #272c35;
+    --ramp-1: #bd3a5b;
+    --ramp-2: #cf5474;
+    --ramp-3: #dd7591;
+    --ramp-4: #e999ae;
+    --ramp-5: #f2bccb;
+    --ramp-6: #fadfe6;
+    --shadow-plate: 0 1px 0 rgba(255, 255, 255, 0.03), 0 22px 46px -34px rgba(0, 0, 0, 0.9);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0d0f13;
+  --plate: #171a20;
+  --plate-2: #1e222a;
+  --plate-3: #232833;
+  --ink: #f1f0ea;
+  --ink-2: #b6b5ae;
+  --ink-3: #918f89;
+  --rule: #2f343d;
+  --rule-soft: #242932;
+  --rose: #dd5c78;
+  --rose-quiet: rgba(221, 92, 120, 0.14);
+  --slate: #5b95d6;
+  --slate-quiet: rgba(91, 149, 214, 0.14);
+  --grid: #272c35;
+  --ramp-1: #bd3a5b;
+  --ramp-2: #cf5474;
+  --ramp-3: #dd7591;
+  --ramp-4: #e999ae;
+  --ramp-5: #f2bccb;
+  --ramp-6: #fadfe6;
+  --shadow-plate: 0 1px 0 rgba(255, 255, 255, 0.03), 0 22px 46px -34px rgba(0, 0, 0, 0.9);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* The plate is laid paper: a whisper of grain, never a texture. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+  background-image: repeating-linear-gradient(0deg, transparent 0 3px, rgba(120, 110, 90, 0.035) 3px 4px);
+}
+:root[data-theme="dark"] body::before,
+:root:not([data-theme="light"]) body::before { opacity: 0.35; }
+
+.wrap { position: relative; z-index: 1; max-width: var(--measure); margin: 0 auto; padding: 0 var(--gutter); }
+
+a { color: inherit; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+a:hover { text-decoration-color: var(--rose); }
+
+:focus-visible { outline: 2px solid var(--rose); outline-offset: 3px; border-radius: 2px; }
+
+h1, h2, h3 { font-family: var(--display); font-weight: 400; letter-spacing: -0.015em; margin: 0; }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.topbar .eyebrow, .plate-head .marks .eyebrow, .masthead-rule .eyebrow { white-space: nowrap; }
+
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+
+/* ---------------------------------------------------------------- topbar */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: saturate(140%) blur(10px);
+  border-bottom: 1px solid var(--rule);
+}
+.topbar-inner { display: flex; align-items: center; gap: 1.5rem; height: 52px; }
+.topbar-brand { font-family: var(--display); font-size: 1.15rem; letter-spacing: 0.02em; }
+.topbar nav { display: flex; gap: 1.35rem; margin-left: auto; overflow-x: auto; scrollbar-width: none; }
+.topbar nav::-webkit-scrollbar { display: none; }
+.topbar nav a { text-decoration: none; }
+.topbar nav a span { color: var(--ink-2); }
+.topbar nav a:hover span { color: var(--ink); }
+
+.theme-toggle {
+  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.18em; text-transform: uppercase;
+  background: transparent; color: var(--ink-2);
+  border: 1px solid var(--rule); border-radius: 999px;
+  padding: 0.42rem 0.85rem; cursor: pointer; white-space: nowrap;
+}
+.theme-toggle:hover { border-color: var(--ink-3); color: var(--ink); }
+
+/* -------------------------------------------------------------- masthead */
+.masthead { padding: clamp(3rem, 8vw, 6rem) 0 0; }
+.masthead h1 {
+  font-size: clamp(3.6rem, 13vw, 9rem);
+  line-height: 0.86;
+  letter-spacing: -0.03em;
+  margin: 0.4rem 0 0;
+}
+.masthead .thesis {
+  font-family: var(--display);
+  font-size: clamp(1.25rem, 2.6vw, 1.9rem);
+  line-height: 1.35;
+  color: var(--ink-2);
+  max-width: 30ch;
+  margin: 1.6rem 0 0;
+}
+.masthead-rule { display: flex; align-items: center; gap: 1rem; margin-top: 2.4rem; }
+.masthead-rule .line { flex: 1; height: 1px; background: var(--rule); }
+
+/* The disclaimer is set as an engraved warning block, not a dismissible
+   toast: it is the first thing the plate says and it does not go away. */
+.disclaimer {
+  margin: 2.4rem 0 0;
+  border: 1px solid var(--ink);
+  border-left-width: 5px;
+  background: var(--plate);
+  padding: 1.35rem 1.5rem;
+  max-width: 74ch;
+}
+.disclaimer .eyebrow { color: var(--ink); margin-bottom: 0.6rem; display: block; }
+.disclaimer p { margin: 0; font-size: 1.02rem; line-height: 1.62; }
+
+/* ---------------------------------------------------------------- ledger */
+.ledger { margin-top: 3rem; }
+.ledger-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.plate-table { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 0.92rem; }
+table.plate-table th {
+  font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--ink-3); font-weight: 400; text-align: right; padding: 0 0 0.6rem; white-space: nowrap;
+  border-bottom: 1px solid var(--ink);
+}
+table.plate-table th:first-child, table.plate-table td:first-child { text-align: left; }
+table.plate-table td { padding: 0.7rem 0; border-bottom: 1px solid var(--rule-soft); text-align: right; white-space: nowrap; }
+table.plate-table td:first-child { white-space: normal; }
+table.plate-table th + th, table.plate-table td + td { padding-left: 1.4rem; }
+table.plate-table tbody tr:hover td { background: var(--plate-2); }
+.ledger .cond-name { font-family: var(--display); font-size: 1.06rem; }
+.ledger .cond-src { display: block; font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.1em; color: var(--ink-3); }
+.ci-glyph { display: block; margin-left: auto; }
+
+/* --------------------------------------------------------------- section */
+section { padding: clamp(4rem, 9vw, 7.5rem) 0 0; }
+.plate-head { margin-bottom: 2.4rem; }
+.plate-head .marks { display: flex; align-items: center; gap: 1rem; }
+.plate-head .marks .line { flex: 1; height: 1px; background: var(--rule); }
+.plate-head h2 { font-size: clamp(2.1rem, 5vw, 3.4rem); line-height: 1.02; margin-top: 0.9rem; }
+.plate-head .standfirst { color: var(--ink-2); max-width: 62ch; margin: 0.9rem 0 0; font-size: 1.04rem; }
+.double-rule { margin-top: 1.5rem; border-top: 2px solid var(--ink); }
+.double-rule::after { content: ""; display: block; margin-top: 3px; border-top: 1px solid var(--ink); }
+
+.plate {
+  background: var(--plate);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow-plate);
+  padding: clamp(1.2rem, 3vw, 2rem);
+}
+.plate + .plate { margin-top: 1.4rem; }
+.caption { font-size: 0.85rem; color: var(--ink-3); line-height: 1.55; margin: 0.9rem 0 0; max-width: 78ch; }
+.caption b { color: var(--ink-2); font-weight: 600; }
+
+/* ------------------------------------------------------------ tab strips */
+.tabs { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--rule); margin-bottom: 1.6rem; }
+.tabs button {
+  font-family: var(--body); font-size: 0.86rem; color: var(--ink-3);
+  background: transparent; border: 0; border-bottom: 2px solid transparent;
+  padding: 0.6rem 0.95rem; cursor: pointer; margin-bottom: -1px; white-space: nowrap;
+}
+.tabs button:hover { color: var(--ink); }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--rose); }
+
+.segmented { display: inline-flex; border: 1px solid var(--rule); border-radius: 2px; overflow: hidden; }
+.segmented button {
+  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase;
+  background: transparent; color: var(--ink-3); border: 0; padding: 0.45rem 0.8rem; cursor: pointer;
+}
+.segmented button + button { border-left: 1px solid var(--rule); }
+.segmented button[aria-pressed="true"] { background: var(--ink); color: var(--plate); }
+.segmented button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ------------------------------------------------------- S1 : instrument */
+.calc { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, 1fr); gap: 2.2rem; align-items: start; }
+@media (max-width: 900px) { .calc { grid-template-columns: 1fr; } }
+
+.fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 0.9rem 1.1rem; }
+.field label { display: block; font-size: 0.8rem; color: var(--ink-2); line-height: 1.35; margin-bottom: 0.3rem; }
+.field .hint { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.08em; color: var(--ink-3); display: block; }
+.field input[type="number"] {
+  width: 100%; font-family: var(--mono); font-size: 0.9rem; color: var(--ink);
+  background: var(--plate-2); border: 1px solid var(--rule); border-radius: 2px;
+  padding: 0.5rem 0.6rem;
+}
+.field input[type="number"]:hover { border-color: var(--ink-3); }
+.field input::placeholder { color: var(--ink-3); font-size: 0.78rem; letter-spacing: 0.04em; }
+.field .triple { display: flex; border: 1px solid var(--rule); border-radius: 2px; overflow: hidden; }
+.field .triple button {
+  flex: 1; font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase;
+  background: var(--plate-2); color: var(--ink-3); border: 0; padding: 0.5rem 0.2rem; cursor: pointer;
+}
+.field .triple button + button { border-left: 1px solid var(--rule); }
+.field .triple button[aria-pressed="true"] { background: var(--ink); color: var(--plate); }
+.field .triple button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.result { position: sticky; top: 68px; background: var(--plate-2); border: 1px solid var(--rule); padding: 1.4rem; }
+.result .risk { font-family: var(--display); font-size: clamp(3.2rem, 7vw, 4.6rem); line-height: 0.95; letter-spacing: -0.03em; }
+.risk-bar { position: relative; height: 10px; background: var(--plate-3); border: 1px solid var(--rule); margin: 0.9rem 0 0.4rem; }
+.risk-bar .fill { position: absolute; inset: 0 auto 0 0; background: var(--rose); }
+.risk-bar .prev { position: absolute; top: -4px; bottom: -4px; width: 1px; background: var(--ink); }
+.risk-scale { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.1em; color: var(--ink-3); }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.16em; text-transform: uppercase;
+  border: 1px solid currentColor; border-radius: 999px; padding: 0.32rem 0.7rem;
+}
+.chip .mark { font-size: 0.8rem; line-height: 1; }
+.chip.positive { color: var(--rose); }
+.chip.negative { color: var(--slate); }
+.chip.uncertain { color: var(--ink-2); border-style: dashed; }
+
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 1rem; font-size: 0.82rem; margin: 1.2rem 0 0; }
+.kv dt { color: var(--ink-3); }
+.kv dd { margin: 0; text-align: right; font-family: var(--mono); }
+
+.contrib { margin-top: 1.4rem; border-top: 1px solid var(--rule); padding-top: 1rem; }
+.contrib-row { display: grid; grid-template-columns: 1fr 130px 62px; gap: 0.6rem; align-items: center; font-size: 0.78rem; padding: 0.3rem 0; }
+.contrib-row .name { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contrib-track { position: relative; height: 12px; background: var(--plate-3); }
+.contrib-track .zero { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--rule); }
+.contrib-track .bar { position: absolute; top: 2px; bottom: 2px; }
+.contrib-row .delta { text-align: right; font-family: var(--mono); font-size: 0.72rem; }
+
+.note {
+  border-left: 3px solid var(--rose); background: var(--rose-quiet);
+  padding: 0.8rem 1rem; font-size: 0.84rem; line-height: 1.55; margin-top: 1rem;
+}
+.note b { font-weight: 600; }
+
+/* --------------------------------------------------------- S2 : coxcomb */
+.coxcomb-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 2rem; align-items: start; }
+@media (max-width: 900px) { .coxcomb-layout { grid-template-columns: 1fr; } }
+#coxcomb-svg { width: 100%; height: auto; display: block; }
+#coxcomb-svg .wedge { cursor: pointer; transition: opacity 160ms ease; }
+#coxcomb-svg .wedge path { stroke: var(--plate); stroke-width: 1.5; }
+#coxcomb-svg .wedge:hover, #coxcomb-svg .wedge:focus-visible { opacity: 1; }
+#coxcomb-svg.dimmed .wedge { opacity: 0.42; }
+#coxcomb-svg .ring { fill: none; stroke: var(--grid); stroke-width: 1; }
+#coxcomb-svg .ring-ref { stroke: var(--ink-3); stroke-dasharray: 3 4; }
+#coxcomb-svg .leader { stroke: var(--rule); stroke-width: 1; }
+#coxcomb-svg .lbl { font-family: var(--body); font-size: 13px; fill: var(--ink); }
+#coxcomb-svg .lbl-sub { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.09em; fill: var(--ink-3); }
+#coxcomb-svg .tick { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; fill: var(--ink-2);
+  stroke: var(--plate); stroke-width: 3px; paint-order: stroke fill; }
+#coxcomb-svg .truncated path { stroke-dasharray: 2 3; }
+
+@media (prefers-reduced-motion: no-preference) {
+  #coxcomb-svg .wedge { animation: bloom 620ms cubic-bezier(0.22, 0.8, 0.3, 1) backwards; transform-origin: 0 0; }
+  @keyframes bloom { from { transform: scale(0.05); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+}
+
+.detail-card { border: 1px solid var(--rule); background: var(--plate-2); padding: 1.1rem 1.2rem; min-height: 250px; }
+.detail-card h3 { font-size: 1.3rem; line-height: 1.15; }
+.ramp-legend { margin-top: 1.4rem; }
+.ramp-swatches { display: flex; height: 14px; border: 1px solid var(--rule); }
+.ramp-swatches span { flex: 1; }
+.ramp-ticks { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.08em; color: var(--ink-3); margin-top: 0.3rem; }
+
+/* -------------------------------------------------------------- S3 : lab */
+.lab-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 2rem; }
+.chart-box { min-width: 0; }
+.chart-box h3 { font-size: 1.15rem; margin-bottom: 0.15rem; }
+.chart-frame { position: relative; height: 300px; margin-top: 0.9rem; }
+.chart-frame canvas, .chart-frame svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+.slider-row { display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap; margin-top: 2.2rem; }
+input[type="range"] { flex: 1; min-width: 220px; accent-color: var(--rose); height: 22px; }
+.threshold-readout { font-family: var(--display); font-size: 2rem; letter-spacing: -0.02em; }
+
+.confusion { display: grid; grid-template-columns: auto repeat(2, minmax(88px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); margin-top: 1.4rem; max-width: 420px; }
+.confusion > div { background: var(--plate); padding: 0.7rem 0.8rem; }
+.confusion .hd { font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+.confusion .cell .n { font-family: var(--display); font-size: 1.6rem; line-height: 1; }
+.confusion .cell .lab { font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.12em; color: var(--ink-3); }
+.rates { display: flex; flex-wrap: wrap; gap: 1.6rem; margin-top: 1.4rem; }
+.rate .v { font-family: var(--display); font-size: 1.55rem; }
+.rate .k { font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+
+/* --------------------------------------------------------- S4 : transfer */
+.transfer-flow { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.8rem; }
+.origin { border: 1px solid var(--ink); padding: 0.6rem 0.9rem; }
+.origin .sub { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.08em; color: var(--ink-3); margin-top: 0.1rem; }
+.origin .t { font-family: var(--display); font-size: 1.2rem; }
+.arrow { font-family: var(--mono); color: var(--ink-3); letter-spacing: 0.3em; }
+
+.site-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.2rem; }
+.site-card { border: 1px solid var(--rule); background: var(--plate-2); padding: 1.2rem; }
+.site-card h3 { font-size: 1.35rem; }
+.site-card .sub { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.1em; color: var(--ink-3); margin-top: 0.15rem; }
+.metric { margin-top: 1.1rem; }
+.metric .k { font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+.metric .v { font-family: var(--display); font-size: 1.5rem; line-height: 1.15; }
+.metric .ci { font-family: var(--mono); font-size: 0.68rem; color: var(--ink-3); }
+.verdict-line { display: flex; align-items: center; gap: 0.4rem; font-size: 0.74rem; color: var(--ink-2); margin-top: 0.2rem; }
+.verdict-line .mark { font-family: var(--mono); }
+
+.finding { border: 1px solid var(--ink); background: var(--plate); padding: 1.4rem 1.5rem; margin-top: 1.4rem; }
+.finding .eyebrow { display: block; margin-bottom: 0.5rem; }
+.finding h3 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+.finding p { margin: 0.6rem 0 0; max-width: 74ch; font-size: 0.95rem; }
+
+/* ------------------------------------------------------------- methods */
+.methods-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem 2.6rem; }
+.method h3 { font-size: 1.28rem; margin-bottom: 0.4rem; }
+.method p { margin: 0; font-size: 0.93rem; color: var(--ink-2); }
+.pull {
+  font-family: var(--display); font-size: clamp(1.5rem, 3.4vw, 2.3rem); line-height: 1.25;
+  border-left: 3px solid var(--rose); padding-left: 1.4rem; margin: 3rem 0 0; max-width: 34ch;
+}
+
+/* ------------------------------------------------------------ provenance */
+footer { margin-top: clamp(4rem, 9vw, 7rem); border-top: 2px solid var(--ink); padding: 2.6rem 0 4rem; }
+.prov-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2.4rem; }
+pre.cmd {
+  font-family: var(--mono); font-size: 0.76rem; line-height: 1.7; margin: 0.6rem 0 0;
+  background: var(--plate-2); border: 1px solid var(--rule); padding: 0.9rem 1rem;
+  overflow-x: auto; color: var(--ink-2);
+}
+.hashes { font-family: var(--mono); font-size: 0.68rem; line-height: 1.9; color: var(--ink-2); }
+.hashes .h { color: var(--ink); word-break: break-all; }
+.hashes .k { color: var(--ink-3); }
+.hashes .caption { font-family: var(--body); margin-top: 0.9rem; }
+.colophon { margin-top: 2.6rem; padding-top: 1.4rem; border-top: 1px solid var(--rule); display: flex; flex-wrap: wrap; gap: 1.2rem; justify-content: space-between; font-size: 0.82rem; color: var(--ink-3); }
+
+#selftest-banner { display: none; }
+#selftest-banner.on {
+  display: block; background: var(--ink); color: var(--paper);
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; padding: 0.7rem var(--gutter);
+}
+
+@media (forced-colors: active) {
+  .plate, .site-card, .result, .disclaimer { border: 1px solid CanvasText; }
+  #coxcomb-svg .wedge path { stroke: CanvasText; }
+}
+</style>
+</head>
+
+<body>
+<div id="selftest-banner" role="status"></div>
+
+<div class="topbar">
+  <div class="wrap topbar-inner">
+    <span class="topbar-brand">Nightingale</span>
+    <nav aria-label="Contents">
+      <a href="#instrument"><span class="eyebrow">Instrument</span></a>
+      <a href="#coxcomb"><span class="eyebrow">Plate I</span></a>
+      <a href="#lab"><span class="eyebrow">Plate II</span></a>
+      <a href="#transfer"><span class="eyebrow">Plate III</span></a>
+      <a href="#methods"><span class="eyebrow">Method</span></a>
+      <a href="#provenance"><span class="eyebrow">Provenance</span></a>
+    </nav>
+    <button class="theme-toggle" id="theme-toggle" type="button" aria-live="polite">Night</button>
+  </div>
+</div>
+
+<header class="masthead">
+  <div class="wrap">
+    <span class="eyebrow">A statistical atlas of six screening models</span>
+    <h1>Nightingale</h1>
+    <p class="thesis">Six calibrated risk models, running in your browser, each printed with the interval it earned.</p>
+
+    <div class="disclaimer">
+      <span class="eyebrow">Read this first</span>
+      <p>These are screening-triage risk models trained on small public research datasets. They are not diagnostic devices and must not be used for medical decisions. The diabetes labels are self-reported survey responses. The cervical-cancer cohort has 55 positive biopsies.</p>
+    </div>
+
+    <div class="masthead-rule">
+      <span class="eyebrow">The ledger</span>
+      <span class="line"></span>
+      <span class="eyebrow" id="ledger-count"></span>
+    </div>
+    <div class="ledger">
+      <div class="ledger-scroll">
+        <table class="plate-table" id="ledger-table">
+          <thead>
+            <tr>
+              <th scope="col">Condition</th>
+              <th scope="col">Cohort</th>
+              <th scope="col">Positives</th>
+              <th scope="col">Prevalence</th>
+              <th scope="col">ROC-AUC</th>
+              <th scope="col">95% interval</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="caption">Every figure on this page is read out of a signed artifact at build time. The bar in the last column is the bootstrap interval on the point estimate beside it, drawn on a common 0.5–1.0 scale so the widths are comparable across conditions.</p>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ============================================================ S1 ==== -->
+<section id="instrument">
+  <div class="wrap">
+    <div class="plate-head">
+      <div class="marks">
+        <span class="eyebrow">The instrument</span>
+        <span class="line"></span>
+        <span class="eyebrow">Runs in this tab</span>
+      </div>
+      <h2>Ask a model a question</h2>
+      <p class="standfirst">The trees, the calibrator and the conformal threshold are all in this page. Nothing you type is sent anywhere, because there is nowhere to send it. Leave any field blank and the model routes that feature down its missing branch — a blank is <em>not measured</em>, never zero.</p>
+      <div class="double-rule"></div>
+    </div>
+
+    <div class="plate">
+      <div class="tabs" id="calc-tabs" role="tablist" aria-label="Condition"></div>
+      <div class="calc">
+        <div>
+          <div class="segmented" style="margin-bottom:1.4rem">
+            <button type="button" id="calc-clear">Clear every field</button>
+          </div>
+          <div class="fields" id="calc-fields"></div>
+        </div>
+        <aside class="result" id="calc-result" aria-live="polite"></aside>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ S2 ==== -->
+<section id="coxcomb">
+  <div class="wrap">
+    <div class="plate-head">
+      <div class="marks">
+        <span class="eyebrow">Plate I</span>
+        <span class="line"></span>
+        <span class="eyebrow">Polar area · area ∝ cohort</span>
+      </div>
+      <h2>The coxcomb</h2>
+      <p class="standfirst">Florence Nightingale drew the first of these in 1858 to argue that most of the army's dead were killed by sanitation, not by the Russians. The form is unchanged: each wedge covers an equal angle, and its <em>area</em> — not its radius — carries the count.</p>
+      <div class="double-rule"></div>
+    </div>
+
+    <div class="plate">
+      <div class="coxcomb-layout">
+        <div>
+          <svg id="coxcomb-svg" viewBox="-410 -330 820 660" role="img" aria-labelledby="coxcomb-title"></svg>
+        </div>
+        <div>
+          <div class="detail-card" id="coxcomb-detail"></div>
+          <div class="ramp-legend">
+            <span class="eyebrow">Tint · ROC-AUC</span>
+            <div class="ramp-swatches" id="ramp-swatches" aria-hidden="true"></div>
+            <div class="ramp-ticks" id="ramp-ticks"></div>
+          </div>
+        </div>
+      </div>
+      <p class="caption" id="coxcomb-caption"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ S3 ==== -->
+<section id="lab">
+  <div class="wrap">
+    <div class="plate-head">
+      <div class="marks">
+        <span class="eyebrow">Plate II</span>
+        <span class="line"></span>
+        <span class="eyebrow">Calibration &amp; decision</span>
+      </div>
+      <h2>The calibration lab</h2>
+      <p class="standfirst">Discrimination asks whether the model ranks patients correctly. Calibration asks whether a stated 20% means twenty in a hundred. A model can be excellent at the first and useless at the second, so both are on the plate, alongside the only question a clinic actually asks: at what threshold is acting on this model better than acting on nobody, or on everybody?</p>
+      <div class="double-rule"></div>
+    </div>
+
+    <div class="plate">
+      <div class="tabs" id="lab-tabs" role="tablist" aria-label="Condition"></div>
+      <div class="lab-charts">
+        <div class="chart-box">
+          <h3>Reliability</h3>
+          <span class="eyebrow">Predicted vs observed, by bin</span>
+          <div class="chart-frame" id="reliability-frame"></div>
+          <p class="caption" id="reliability-caption"></p>
+        </div>
+        <div class="chart-box">
+          <h3>Net benefit</h3>
+          <span class="eyebrow">Decision-curve analysis</span>
+          <div class="chart-frame" id="dca-frame"></div>
+          <p class="caption" id="dca-caption"></p>
+        </div>
+      </div>
+
+      <div class="slider-row">
+        <div>
+          <span class="eyebrow">Decision threshold</span>
+          <div class="threshold-readout num" id="threshold-readout">0.50</div>
+        </div>
+        <input type="range" id="threshold" min="0.01" max="0.99" step="0.01" value="0.5" aria-label="Decision threshold">
+      </div>
+
+      <div class="confusion" id="confusion"></div>
+      <div class="rates" id="rates"></div>
+      <p class="caption" id="lab-sample-caption"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ S4 ==== -->
+<section id="transfer">
+  <div class="wrap">
+    <div class="plate-head">
+      <div class="marks">
+        <span class="eyebrow">Plate III</span>
+        <span class="line"></span>
+        <span class="eyebrow">Four hospitals</span>
+      </div>
+      <h2>What travels, and what breaks</h2>
+      <p class="standfirst">The heart-disease cohort is four hospitals wearing one filename. Train on Cleveland alone, then test where the model was never fitted, and you can watch discrimination survive the trip while calibration does not.</p>
+      <div class="double-rule"></div>
+    </div>
+
+    <div class="plate">
+      <div class="transfer-flow" id="transfer-flow"></div>
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1.4rem">
+        <span class="eyebrow">Show</span>
+        <div class="segmented" id="transfer-toggle">
+          <button type="button" data-mode="naive" aria-pressed="true">As shipped</button>
+          <button type="button" data-mode="recalibrated" aria-pressed="false">Intercept-recalibrated</button>
+        </div>
+      </div>
+      <div class="site-cards" id="site-cards"></div>
+      <p class="caption" id="transfer-caption"></p>
+    </div>
+
+    <div class="plate" style="margin-top:1.4rem">
+      <span class="eyebrow">Exhibit · feature availability by site</span>
+      <div class="ledger-scroll" style="margin-top:0.9rem">
+        <table class="plate-table" id="availability-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="caption" id="availability-caption"></p>
+    </div>
+
+    <div class="finding" id="finding-sentinel"></div>
+    <div class="finding" id="finding-va"></div>
+  </div>
+</section>
+
+<!-- ======================================================== methods ==== -->
+<section id="methods">
+  <div class="wrap">
+    <div class="plate-head">
+      <div class="marks">
+        <span class="eyebrow">Method</span>
+        <span class="line"></span>
+        <span class="eyebrow">How the numbers were made</span>
+      </div>
+      <h2>The rules of the plate</h2>
+      <div class="double-rule"></div>
+    </div>
+    <div class="methods-grid" id="methods-grid"></div>
+    <p class="pull">No number appears on this page without the interval it earned.</p>
+  </div>
+</section>
+
+</main>
+
+<!-- ===================================================== provenance ==== -->
+<footer id="provenance">
+  <div class="wrap">
+    <div class="marks" style="display:flex;align-items:center;gap:1rem;margin-bottom:2rem">
+      <span class="eyebrow">Provenance</span>
+      <span class="line" style="flex:1;height:1px;background:var(--rule)"></span>
+      <span class="eyebrow">Check it yourself</span>
+    </div>
+
+    <div class="prov-grid">
+      <div>
+        <h3 style="font-size:1.2rem">Verify every artifact</h3>
+        <p style="font-size:0.9rem;color:var(--ink-2);margin:0.5rem 0 0;max-width:52ch">Each artifact is SHA-256 hashed into a manifest and the manifest is signed with an Ed25519 key that never enters the repository. This recomputes every hash and checks the signature.</p>
+        <pre class="cmd">pip install -e . &amp;&amp; nightingale verify</pre>
+        <h3 style="font-size:1.2rem;margin-top:1.8rem">Confirm the public key</h3>
+        <pre class="cmd">openssl pkey -pubin -in provenance/pubkey.pem \
+  -outform DER | tail -c 32 | shasum -a 256</pre>
+      </div>
+      <div>
+        <span class="eyebrow">Signing key · SHA-256 of the raw Ed25519 key</span>
+        <div class="hashes" id="prov-hashes"></div>
+      </div>
+    </div>
+
+    <div class="colophon">
+      <span>© 2026 Safdar Hussain · MIT licence</span>
+      <span><a href="https://github.com/safdar-hussain1/nightingale">github.com/safdar-hussain1/nightingale</a></span>
+      <span id="colophon-commit" class="num"></span>
+    </div>
+  </div>
+</footer>
+
+<script src="__CHARTJS_URL__" integrity="__CHARTJS_SRI__" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<script>
+/*__WALKER__*/
+</script>
+
+<script>
+'use strict';
+
+var NG = /*__DATA__*/;
+
+/* ------------------------------------------------------------------ *
+ *  Small helpers
+ * ------------------------------------------------------------------ */
+function $(id) { return document.getElementById(id); }
+function el(tag, cls, text) {
+  var node = document.createElement(tag);
+  if (cls) { node.className = cls; }
+  if (text !== undefined && text !== null) { node.textContent = String(text); }
+  return node;
+}
+function esc(value) {
+  return String(value).replace(/[&<>"]/g, function (ch) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch];
+  });
+}
+function fixed(value, places) {
+  return (value === null || value === undefined) ? '—' : Number(value).toFixed(places);
+}
+function pct(value, places) {
+  return (value === null || value === undefined) ? '—' : (Number(value) * 100).toFixed(places === undefined ? 1 : places) + '%';
+}
+function count(value) { return Number(value).toLocaleString('en-US'); }
+/* Every published metric is [point, lo, hi]; there is no code path that
+   prints the point estimate on its own. */
+function ci(triple, places) {
+  if (!triple) { return '—'; }
+  return fixed(triple[0], places) + ' [' + fixed(triple[1], places) + '–' + fixed(triple[2], places) + ']';
+}
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+var CONDITIONS = NG.conditions.slice();
+var BY_SLUG = {};
+CONDITIONS.forEach(function (c) { BY_SLUG[c.slug] = c; });
+
+/* ------------------------------------------------------------------ *
+ *  Theme
+ * ------------------------------------------------------------------ */
+var themeListeners = [];
+function onThemeChange(fn) { themeListeners.push(fn); }
+function effectiveTheme() {
+  var stamped = document.documentElement.getAttribute('data-theme');
+  if (stamped) { return stamped; }
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+(function setUpTheme() {
+  var button = $('theme-toggle');
+  function paintLabel() {
+    var next = effectiveTheme() === 'dark' ? 'light' : 'dark';
+    button.textContent = next === 'dark' ? 'Night' : 'Day';
+    button.setAttribute('aria-label', 'Switch to the ' + next + ' plate');
+  }
+  paintLabel();
+  button.addEventListener('click', function () {
+    var next = effectiveTheme() === 'dark' ? 'light' : 'dark';
+    /* Storage first, then the stamp: a click that is not remembered before
+       anything else happens is a click the page forgets. */
+    try { localStorage.setItem('nightingale-theme', next); } catch (e) { /* private mode */ }
+    document.documentElement.setAttribute('data-theme', next);
+    paintLabel();
+    themeListeners.forEach(function (fn) { fn(); });
+  });
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+    if (!document.documentElement.getAttribute('data-theme')) {
+      paintLabel();
+      themeListeners.forEach(function (fn) { fn(); });
+    }
+  });
+})();
+
+/* ------------------------------------------------------------------ *
+ *  The ledger
+ * ------------------------------------------------------------------ */
+(function ledger() {
+  var body = $('ledger-table').querySelector('tbody');
+  var LO = 0.5, HI = 1.0, W = 132;
+  var xPos = function (value) { return (Math.min(HI, Math.max(LO, value)) - LO) / (HI - LO) * W; };
+
+  CONDITIONS.forEach(function (c) {
+    var row = el('tr');
+    var name = el('td');
+    name.innerHTML = '<span class="cond-name">' + esc(c.display) + '</span>' +
+      '<span class="cond-src">' + esc(c.source) + ' · positive = ' + esc(c.positive_meaning) + '</span>';
+    row.appendChild(name);
+    row.appendChild(el('td', 'num', count(c.n)));
+    row.appendChild(el('td', 'num', count(c.n_positive)));
+    row.appendChild(el('td', 'num', pct(c.prevalence)));
+    row.appendChild(el('td', 'num', fixed(c.roc_auc[0], 3)));
+
+    var glyphCell = el('td');
+    var lo = xPos(c.roc_auc[1]), hi = xPos(c.roc_auc[2]), mid = xPos(c.roc_auc[0]);
+    glyphCell.innerHTML =
+      '<svg class="ci-glyph" width="' + W + '" height="16" viewBox="0 0 ' + W + ' 16" aria-hidden="true">' +
+      '<line x1="0" y1="8" x2="' + W + '" y2="8" stroke="var(--grid)" stroke-width="1"/>' +
+      '<line x1="' + lo.toFixed(1) + '" y1="8" x2="' + hi.toFixed(1) + '" y2="8" stroke="var(--rose)" stroke-width="3"/>' +
+      '<line x1="' + lo.toFixed(1) + '" y1="3" x2="' + lo.toFixed(1) + '" y2="13" stroke="var(--rose)" stroke-width="1"/>' +
+      '<line x1="' + hi.toFixed(1) + '" y1="3" x2="' + hi.toFixed(1) + '" y2="13" stroke="var(--rose)" stroke-width="1"/>' +
+      '<circle cx="' + mid.toFixed(1) + '" cy="8" r="3" fill="var(--ink)"/></svg>' +
+      '<span class="cond-src">' + fixed(c.roc_auc[1], 3) + '–' + fixed(c.roc_auc[2], 3) + '</span>';
+    row.appendChild(glyphCell);
+    body.appendChild(row);
+  });
+
+  var patients = CONDITIONS.reduce(function (sum, c) { return sum + c.n; }, 0);
+  $('ledger-count').textContent = CONDITIONS.length + ' conditions · ' + count(patients) + ' records';
+})();
+
+/* ------------------------------------------------------------------ *
+ *  S1 — the instrument
+ * ------------------------------------------------------------------ */
+var calcSlug = CONDITIONS[0].slug;
+var calcValues = {};
+
+function tabStrip(container, onPick, current) {
+  container.innerHTML = '';
+  CONDITIONS.forEach(function (c) {
+    var button = el('button', null, c.display);
+    button.type = 'button';
+    button.setAttribute('role', 'tab');
+    button.setAttribute('aria-selected', c.slug === current ? 'true' : 'false');
+    button.addEventListener('click', function () {
+      Array.prototype.forEach.call(container.children, function (node) {
+        node.setAttribute('aria-selected', 'false');
+      });
+      button.setAttribute('aria-selected', 'true');
+      onPick(c.slug);
+    });
+    container.appendChild(button);
+  });
+}
+
+function buildFields() {
+  var condition = BY_SLUG[calcSlug];
+  var host = $('calc-fields');
+  host.innerHTML = '';
+
+  condition.features.forEach(function (feature, index) {
+    var field = el('div', 'field');
+    var label = el('label');
+    label.setAttribute('for', 'f-' + index);
+    label.textContent = feature.label;
+    var hint = el('span', 'hint');
+    if (feature.constant) {
+      hint.textContent = 'constant at ' + feature.min + ' in this cohort';
+    } else if (feature.binary) {
+      hint.textContent = 'yes / no';
+    } else {
+      hint.textContent = 'observed ' + feature.min + '–' + feature.max + (feature.unit ? ' ' + feature.unit : '');
+    }
+    label.appendChild(hint);
+    field.appendChild(label);
+
+    if (feature.binary || feature.constant) {
+      var triple = el('div', 'triple');
+      [['—', null], ['No', 0], ['Yes', 1]].forEach(function (option) {
+        var button = el('button', null, option[0]);
+        button.type = 'button';
+        button.setAttribute('aria-pressed', calcValues[feature.name] === option[1] ? 'true' : 'false');
+        if (feature.constant && option[1] === 1) { button.disabled = true; }
+        button.addEventListener('click', function () {
+          Array.prototype.forEach.call(triple.children, function (node) {
+            node.setAttribute('aria-pressed', 'false');
+          });
+          button.setAttribute('aria-pressed', 'true');
+          calcValues[feature.name] = option[1];
+          score();
+        });
+        triple.appendChild(button);
+      });
+      field.appendChild(triple);
+    } else {
+      var input = document.createElement('input');
+      input.type = 'number';
+      input.id = 'f-' + index;
+      input.step = 'any';
+      input.placeholder = 'not measured';
+      if (calcValues[feature.name] !== null && calcValues[feature.name] !== undefined) {
+        input.value = calcValues[feature.name];
+      }
+      input.addEventListener('input', function () {
+        var raw = input.value.trim();
+        calcValues[feature.name] = raw === '' ? null : Number(raw);
+        score();
+      });
+      field.appendChild(input);
+    }
+    host.appendChild(field);
+  });
+}
+
+var VERDICT_MARK = { positive: '▲', negative: '▼', uncertain: '◇' };
+
+function score() {
+  var condition = BY_SLUG[calcSlug];
+  var model = condition.model;
+  var row = condition.features.map(function (feature) {
+    var value = calcValues[feature.name];
+    return (value === undefined) ? null : value;
+  });
+  var supplied = row.filter(function (value) { return value !== null; }).length;
+  var out = predict(model, row);
+
+  /* "What changes if this field is unknown": re-score the same row with one
+     field blanked, and report the movement. It is a leave-one-out difference
+     against the model's own missing branch, not an attribution method -- it
+     answers "how much is this measurement buying me", which is the question
+     someone filling in a form is actually asking. */
+  var contributions = [];
+  row.forEach(function (value, index) {
+    if (value === null) { return; }
+    var masked = row.slice();
+    masked[index] = null;
+    contributions.push({
+      label: condition.features[index].label,
+      delta: out.p_cal - predict(model, masked).p_cal
+    });
+  });
+  contributions.sort(function (a, b) { return Math.abs(b.delta) - Math.abs(a.delta); });
+  /* A field whose removal moves the estimate by less than a tenth of a point
+     has not told the model anything, and listing it as "+0.0 pp" would read
+     as a broken row rather than as the honest answer "this measurement did
+     not matter here". Those fields are counted below the list instead. */
+  var MOVED = 0.001;
+  var inert = contributions.filter(function (item) { return Math.abs(item.delta) < MOVED; }).length;
+  contributions = contributions
+    .filter(function (item) { return Math.abs(item.delta) >= MOVED; })
+    .slice(0, NG.settings.contribution_slots);
+  var widest = contributions.reduce(function (best, item) {
+    return Math.max(best, Math.abs(item.delta));
+  }, 1e-9);
+
+  var host = $('calc-result');
+  host.innerHTML = '';
+
+  host.appendChild(el('span', 'eyebrow', supplied ? 'Calibrated risk' : 'Calibrated risk · nothing measured'));
+  host.appendChild(el('div', 'risk num', pct(out.p_cal, 1)));
+
+  /* An untouched form is not a neutral starting point. Every feature is
+     routing down its missing branch, and the number that comes back is
+     whatever those branches happen to add up to -- which is worth saying out
+     loud, because a large figure sitting above an empty form reads like a
+     verdict on a patient rather than a property of the model. */
+  if (!supplied) {
+    var blankNote = el('div', 'note');
+    blankNote.style.borderLeftColor = 'var(--ink)';
+    blankNote.style.background = 'transparent';
+    blankNote.style.paddingLeft = '0.9rem';
+    blankNote.textContent = 'No field has been filled in, so every feature is taking its missing branch. ' +
+      'This figure is what those branches sum to — it is not a prior, not the cohort rate, and not about anyone. Fill a field in and watch it move.';
+    host.appendChild(blankNote);
+  }
+
+  var bar = el('div', 'risk-bar');
+  var fill = el('div', 'fill');
+  fill.style.width = (out.p_cal * 100).toFixed(2) + '%';
+  bar.appendChild(fill);
+  var prev = el('div', 'prev');
+  prev.style.left = (condition.prevalence * 100).toFixed(2) + '%';
+  prev.title = 'Cohort prevalence';
+  bar.appendChild(prev);
+  host.appendChild(bar);
+  var scale = el('div', 'risk-scale');
+  scale.appendChild(el('span', null, '0%'));
+  scale.appendChild(el('span', null, '│ cohort prevalence ' + pct(condition.prevalence)));
+  scale.appendChild(el('span', null, '100%'));
+  host.appendChild(scale);
+
+  var chip = el('div', 'chip ' + out.set);
+  chip.style.marginTop = '1.2rem';
+  chip.appendChild(el('span', 'mark', VERDICT_MARK[out.set]));
+  chip.appendChild(el('span', null, 'conformal set: ' + out.set));
+  host.appendChild(chip);
+
+  var kv = el('dl', 'kv');
+  [
+    ['Uncalibrated p', fixed(out.p_raw, 4)],
+    ['Calibrated p', fixed(out.p_cal, 4)],
+    ['Calibrator', condition.cv.calibration_method],
+    ['Conformal q̂ (α = ' + fixed(condition.conformal.alpha, 2) + ')', fixed(condition.conformal.q_hat, 4)],
+    ['Fields supplied', supplied + ' of ' + condition.features.length]
+  ].forEach(function (pair) {
+    kv.appendChild(el('dt', null, pair[0]));
+    kv.appendChild(el('dd', 'num', pair[1]));
+  });
+  host.appendChild(kv);
+
+  var contrib = el('div', 'contrib');
+  contrib.appendChild(el('span', 'eyebrow', 'What changes if this field is unknown'));
+  if (!supplied) {
+    contrib.appendChild(el('p', 'caption', 'Every field is blank, so this estimate is the model’s answer for a patient with nothing measured. Fill one in to see how far it moves.'));
+  } else if (!contributions.length) {
+    contrib.appendChild(el('p', 'caption', 'None of the ' + supplied + ' fields you have filled in moves this estimate by as much as a tenth of a point. ' +
+      'With everything else unknown, the model is being carried by its missing branches, not by what you measured.'));
+  } else {
+    contributions.forEach(function (item) {
+      var line = el('div', 'contrib-row');
+      line.appendChild(el('div', 'name', item.label));
+      var track = el('div', 'contrib-track');
+      track.appendChild(el('div', 'zero'));
+      var barItem = el('div', 'bar');
+      var share = Math.abs(item.delta) / widest * 48;
+      if (item.delta >= 0) {
+        barItem.style.left = '50%';
+        barItem.style.width = share + '%';
+        barItem.style.background = 'var(--rose)';
+      } else {
+        barItem.style.right = '50%';
+        barItem.style.width = share + '%';
+        barItem.style.background = 'var(--slate)';
+      }
+      track.appendChild(barItem);
+      line.appendChild(track);
+      line.appendChild(el('div', 'delta', (item.delta >= 0 ? '+' : '−') + Math.abs(item.delta * 100).toFixed(1) + ' pp'));
+      contrib.appendChild(line);
+    });
+    contrib.appendChild(el('p', 'caption', 'Percentage points the calibrated risk moves when that one field is set back to “not measured”. Rose raises the estimate, slate lowers it.' +
+      (inert ? ' ' + inert + ' other supplied field' + (inert === 1 ? '' : 's') + ' moved it by less than a tenth of a point.' : '')));
+  }
+  host.appendChild(contrib);
+
+  condition.notes.forEach(function (text) {
+    var note = el('div', 'note');
+    note.appendChild(el('span', null, text));
+    host.appendChild(note);
+  });
+}
+
+function selectCalc(slug) {
+  calcSlug = slug;
+  calcValues = {};
+  buildFields();
+  score();
+}
+
+tabStrip($('calc-tabs'), selectCalc, calcSlug);
+$('calc-clear').addEventListener('click', function () { selectCalc(calcSlug); });
+buildFields();
+score();
+
+/* ------------------------------------------------------------------ *
+ *  S2 — the coxcomb
+ *
+ *  Radius is the square root of the cohort, so the WEDGE AREA is the count.
+ *  One cohort is three orders of magnitude larger than the smallest and its
+ *  faithful radius would be several metres of screen; that wedge is drawn to
+ *  the frame with a broken outer arc and labelled with the factor it was cut
+ *  by, which is what a 19th-century plate did with an off-scale bar.
+ * ------------------------------------------------------------------ */
+var AUC_DOMAIN = [0.65, 1.0];
+var RAMP_STEPS = 6;
+var R_REF = 180, R_CAP = 232;
+
+function rampIndex(auc) {
+  var t = (auc - AUC_DOMAIN[0]) / (AUC_DOMAIN[1] - AUC_DOMAIN[0]);
+  return Math.max(0, Math.min(RAMP_STEPS - 1, Math.floor(t * RAMP_STEPS)));
+}
+
+(function coxcomb() {
+  var svg = $('coxcomb-svg');
+  var ordered = CONDITIONS.slice().sort(function (a, b) { return b.n - a.n; });
+
+  /* The reference cohort is the largest one within an order of magnitude of
+     the smallest; anything beyond that is what gets truncated. Deriving it
+     rather than naming a condition means a future cohort re-sorts itself. */
+  var sizes = ordered.map(function (c) { return c.n; });
+  var smallest = Math.min.apply(null, sizes);
+  var inScale = sizes.filter(function (n) { return n <= smallest * 10; });
+  var reference = Math.max.apply(null, inScale);
+  var radiusOf = function (n) { return R_REF * Math.sqrt(n / reference); };
+
+  var NS = 'http://www.w3.org/2000/svg';
+  function node(tag, attrs) {
+    var element = document.createElementNS(NS, tag);
+    Object.keys(attrs).forEach(function (key) { element.setAttribute(key, attrs[key]); });
+    return element;
+  }
+  function point(radius, degrees) {
+    var rad = degrees * Math.PI / 180;
+    return [radius * Math.cos(rad), radius * Math.sin(rad)];
+  }
+
+  var title = node('title', { id: 'coxcomb-title' });
+  title.textContent = 'Polar-area diagram: six cohorts, wedge area proportional to cohort size, tint by ROC-AUC.';
+  svg.appendChild(title);
+
+  [250, 500, 750].forEach(function (tick) {
+    svg.appendChild(node('circle', { class: 'ring', cx: 0, cy: 0, r: radiusOf(tick).toFixed(1) }));
+    var label = node('text', { class: 'tick', x: 4, y: (-radiusOf(tick) + 12).toFixed(1) });
+    label.textContent = count(tick);
+    svg.appendChild(label);
+  });
+  svg.appendChild(node('circle', { class: 'ring ring-ref', cx: 0, cy: 0, r: R_REF }));
+  var refLabel = node('text', { class: 'tick', x: 4, y: -R_REF + 12 });
+  refLabel.textContent = count(reference);
+  svg.appendChild(refLabel);
+
+  var span = 360 / ordered.length;
+  var truncatedNotes = [];
+
+  ordered.forEach(function (condition, index) {
+    var trueRadius = radiusOf(condition.n);
+    var drawn = Math.min(trueRadius, R_CAP);
+    var truncated = trueRadius > R_CAP;
+    if (truncated) {
+      truncatedNotes.push({ condition: condition, factor: trueRadius / R_REF });
+    }
+
+    var a0 = -90 + index * span;
+    var a1 = a0 + span;
+    var p0 = point(drawn, a0), p1 = point(drawn, a1);
+    var group = node('g', { class: 'wedge' + (truncated ? ' truncated' : ''), tabindex: '0', role: 'listitem' });
+    group.style.animationDelay = (index * 70) + 'ms';
+
+    var path = node('path', {
+      d: 'M0,0 L' + p0[0].toFixed(2) + ',' + p0[1].toFixed(2) +
+         ' A' + drawn.toFixed(2) + ',' + drawn.toFixed(2) + ' 0 0 1 ' +
+         p1[0].toFixed(2) + ',' + p1[1].toFixed(2) + ' Z',
+      fill: 'var(--ramp-' + (rampIndex(condition.roc_auc[0]) + 1) + ')'
+    });
+    group.appendChild(path);
+
+    var mid = a0 + span / 2;
+    var edge = point(drawn + 6, mid);
+    var anchorPoint = point(R_CAP + 30, mid);
+    group.appendChild(node('line', {
+      class: 'leader',
+      x1: edge[0].toFixed(1), y1: edge[1].toFixed(1),
+      x2: anchorPoint[0].toFixed(1), y2: anchorPoint[1].toFixed(1)
+    }));
+
+    var cos = Math.cos(mid * Math.PI / 180);
+    var anchor = cos > 0.2 ? 'start' : (cos < -0.2 ? 'end' : 'middle');
+    var tx = anchorPoint[0] + (anchor === 'start' ? 8 : anchor === 'end' ? -8 : 0);
+    var name = node('text', { class: 'lbl', x: tx.toFixed(1), y: anchorPoint[1].toFixed(1), 'text-anchor': anchor });
+    name.textContent = condition.display.replace(/\s*\(.*\)\s*$/, '');
+    svg.appendChild(name);
+    var sub = node('text', { class: 'lbl-sub', x: tx.toFixed(1), y: (anchorPoint[1] + 15).toFixed(1), 'text-anchor': anchor });
+    sub.textContent = count(condition.n) + ' · AUC ' + fixed(condition.roc_auc[0], 3) + (truncated ? ' · arc cut' : '');
+    svg.appendChild(sub);
+
+    var describe = function () { showDetail(condition); };
+    group.addEventListener('mouseenter', function () { svg.classList.add('dimmed'); describe(); });
+    group.addEventListener('focus', function () { svg.classList.add('dimmed'); describe(); });
+    group.addEventListener('mouseleave', function () { svg.classList.remove('dimmed'); });
+    group.addEventListener('blur', function () { svg.classList.remove('dimmed'); });
+    svg.insertBefore(group, svg.firstChild.nextSibling);
+  });
+
+  function showDetail(condition) {
+    var host = $('coxcomb-detail');
+    host.innerHTML = '';
+    host.appendChild(el('span', 'eyebrow', condition.source));
+    host.appendChild(el('h3', null, condition.display));
+    var kv = el('dl', 'kv');
+    [
+      ['Cohort', count(condition.n)],
+      ['Positives', count(condition.n_positive) + ' (' + pct(condition.prevalence) + ')'],
+      ['ROC-AUC', ci(condition.roc_auc, 3)],
+      ['PR-AUC', ci(condition.pr_auc, 3)],
+      ['Brier', ci(condition.brier, 3)],
+      ['ECE', ci(condition.ece, 3)]
+    ].forEach(function (pair) {
+      kv.appendChild(el('dt', null, pair[0]));
+      kv.appendChild(el('dd', 'num', pair[1]));
+    });
+    host.appendChild(kv);
+    host.appendChild(el('p', 'caption', 'Positive means ' + condition.positive_meaning + '.'));
+  }
+  showDetail(ordered[0]);
+
+  var swatches = $('ramp-swatches');
+  for (var step = 1; step <= RAMP_STEPS; step++) {
+    var swatch = el('span');
+    swatch.style.background = 'var(--ramp-' + step + ')';
+    swatches.appendChild(swatch);
+  }
+  var ticks = $('ramp-ticks');
+  ticks.appendChild(el('span', null, fixed(AUC_DOMAIN[0], 2)));
+  ticks.appendChild(el('span', null, fixed((AUC_DOMAIN[0] + AUC_DOMAIN[1]) / 2, 3)));
+  ticks.appendChild(el('span', null, fixed(AUC_DOMAIN[1], 2)));
+
+  var caption = 'Radius is √(cohort ÷ ' + count(reference) + ') so that wedge area, not radius, carries the count; ' +
+    'the hairline rings are cohorts of 250, 500 and 750 and the dashed ring is ' + count(reference) + '. ';
+  if (truncatedNotes.length) {
+    caption += truncatedNotes.map(function (item) {
+      return item.condition.display + ' holds ' + count(item.condition.n) + ' records — its true radius is ' +
+        item.factor.toFixed(1) + '× the dashed ring, several screens off the plate, so its arc is cut at the frame and broken to say so.';
+    }).join(' ') + ' ';
+  }
+  caption += 'Tint is ROC-AUC on a fixed 0.65–1.00 scale, so a wedge keeps its colour no matter which conditions are on the page.';
+  $('coxcomb-caption').textContent = caption;
+})();
+
+/* ------------------------------------------------------------------ *
+ *  Charts: Chart.js when it is there, inline SVG when it is not.
+ *
+ *  The page has to work opened straight off a disk with no network, so the
+ *  SVG renderer below is not a placeholder -- it is the offline path, and it
+ *  draws the same two figures from the same arrays.
+ * ------------------------------------------------------------------ */
+var HAVE_CHARTJS = typeof Chart !== 'undefined';
+
+function chartInk() {
+  return {
+    ink: cssVar('--ink'),
+    ink2: cssVar('--ink-2'),
+    ink3: cssVar('--ink-3'),
+    grid: cssVar('--grid'),
+    rose: cssVar('--rose'),
+    slate: cssVar('--slate'),
+    plate: cssVar('--plate')
+  };
+}
+
+var SVG_NS = 'http://www.w3.org/2000/svg';
+function svgNode(tag, attrs) {
+  var element = document.createElementNS(SVG_NS, tag);
+  Object.keys(attrs).forEach(function (key) { element.setAttribute(key, attrs[key]); });
+  return element;
+}
+
+/* A minimal cartesian frame: 0–1 or data-ranged axes, hairline grid, ticks. */
+function svgFrame(host, xRange, yRange, xTicks, yTicks, xLabel, yLabel) {
+  host.innerHTML = '';
+  var W = 480, H = 300, L = 52, R = 12, T = 14, B = 40;
+  var svg = svgNode('svg', { viewBox: '0 0 ' + W + ' ' + H, preserveAspectRatio: 'none' });
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  var sx = function (v) { return L + (v - xRange[0]) / (xRange[1] - xRange[0]) * (W - L - R); };
+  var sy = function (v) { return H - B - (v - yRange[0]) / (yRange[1] - yRange[0]) * (H - T - B); };
+
+  yTicks.forEach(function (v) {
+    svg.appendChild(svgNode('line', { x1: L, y1: sy(v).toFixed(1), x2: W - R, y2: sy(v).toFixed(1), stroke: 'var(--grid)', 'stroke-width': 1 }));
+    var text = svgNode('text', { x: L - 8, y: (sy(v) + 3.5).toFixed(1), 'text-anchor': 'end', fill: 'var(--ink-3)', 'font-size': 10, 'font-family': 'var(--mono)' });
+    text.textContent = v.toFixed(2);
+    svg.appendChild(text);
+  });
+  xTicks.forEach(function (v) {
+    var text = svgNode('text', { x: sx(v).toFixed(1), y: H - B + 16, 'text-anchor': 'middle', fill: 'var(--ink-3)', 'font-size': 10, 'font-family': 'var(--mono)' });
+    text.textContent = v.toFixed(2);
+    svg.appendChild(text);
+  });
+  svg.appendChild(svgNode('line', { x1: L, y1: sy(yRange[0]), x2: W - R, y2: sy(yRange[0]), stroke: 'var(--ink-3)', 'stroke-width': 1 }));
+  svg.appendChild(svgNode('line', { x1: L, y1: T, x2: L, y2: H - B, stroke: 'var(--ink-3)', 'stroke-width': 1 }));
+  var xt = svgNode('text', { x: (L + W - R) / 2, y: H - 6, 'text-anchor': 'middle', fill: 'var(--ink-3)', 'font-size': 10, 'font-family': 'var(--mono)' });
+  xt.textContent = xLabel;
+  svg.appendChild(xt);
+  var yt = svgNode('text', { x: 12, y: (T + H - B) / 2, 'text-anchor': 'middle', fill: 'var(--ink-3)', 'font-size': 10, 'font-family': 'var(--mono)', transform: 'rotate(-90 12 ' + ((T + H - B) / 2) + ')' });
+  yt.textContent = yLabel;
+  svg.appendChild(yt);
+
+  host.appendChild(svg);
+  return { svg: svg, sx: sx, sy: sy };
+}
+
+function svgPath(frame, points, stroke, dash, width) {
+  var d = points.map(function (p, i) {
+    return (i ? 'L' : 'M') + frame.sx(p[0]).toFixed(1) + ',' + frame.sy(p[1]).toFixed(1);
+  }).join(' ');
+  var path = svgNode('path', { d: d, fill: 'none', stroke: stroke, 'stroke-width': width || 2, 'stroke-linejoin': 'round' });
+  if (dash) { path.setAttribute('stroke-dasharray', dash); }
+  frame.svg.appendChild(path);
+}
+
+/* ------------------------------------------------------------------ *
+ *  S3 — the calibration lab
+ * ------------------------------------------------------------------ */
+var labSlug = CONDITIONS[0].slug;
+var threshold = 0.5;
+var reliabilityChart = null;
+var dcaChart = null;
+
+function drawReliability() {
+  var condition = BY_SLUG[labSlug];
+  var host = $('reliability-frame');
+  var bins = condition.reliability.filter(function (bin) { return bin.n > 0; });
+  var points = bins.map(function (bin) { return [bin.mean_pred, bin.frac_pos]; });
+
+  if (HAVE_CHARTJS) {
+    host.innerHTML = '<canvas></canvas>';
+    var ink = chartInk();
+    if (reliabilityChart) { reliabilityChart.destroy(); }
+    reliabilityChart = new Chart(host.querySelector('canvas'), {
+      type: 'scatter',
+      data: {
+        datasets: [
+          {
+            label: 'Perfect calibration',
+            data: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+            type: 'line',
+            borderColor: ink.ink3,
+            borderDash: [4, 4],
+            borderWidth: 1,
+            pointRadius: 0
+          },
+          {
+            label: 'Observed',
+            data: bins.map(function (bin) { return { x: bin.mean_pred, y: bin.frac_pos, n: bin.n }; }),
+            showLine: true,
+            borderColor: ink.rose,
+            borderWidth: 2,
+            backgroundColor: ink.rose,
+            pointBackgroundColor: ink.rose,
+            pointBorderColor: ink.plate,
+            pointBorderWidth: 2,
+            pointRadius: function (context) {
+              var bin = context.raw;
+              return bin && bin.n ? Math.min(11, 4 + Math.sqrt(bin.n) / 3) : 4;
+            },
+            pointHoverRadius: 12,
+            /* Bins at the corners are the biggest ones; without this their
+               marks are sliced in half by the plot edge. */
+            clip: false
+          }
+        ]
+      },
+      options: {
+        maintainAspectRatio: false,
+        animation: false,
+        layout: { padding: { top: 14, right: 14 } },
+        scales: {
+          x: { min: 0, max: 1, title: { display: true, text: 'Predicted', color: ink.ink3 }, grid: { color: ink.grid }, ticks: { color: ink.ink3 } },
+          y: { min: 0, max: 1, title: { display: true, text: 'Observed', color: ink.ink3 }, grid: { color: ink.grid }, ticks: { color: ink.ink3 } }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (item) {
+                var raw = item.raw;
+                return raw.n !== undefined
+                  ? 'predicted ' + raw.x.toFixed(3) + ' · observed ' + raw.y.toFixed(3) + ' · n = ' + count(raw.n)
+                  : 'perfect calibration';
+              }
+            }
+          }
+        }
+      }
+    });
+  } else {
+    var frame = svgFrame(host, [0, 1], [0, 1], [0, 0.25, 0.5, 0.75, 1], [0, 0.25, 0.5, 0.75, 1], 'Predicted', 'Observed');
+    svgPath(frame, [[0, 0], [1, 1]], 'var(--ink-3)', '4 4', 1);
+    svgPath(frame, points, 'var(--rose)', null, 2);
+    points.forEach(function (p) {
+      frame.svg.appendChild(svgNode('circle', {
+        cx: frame.sx(p[0]).toFixed(1), cy: frame.sy(p[1]).toFixed(1), r: 4.5,
+        fill: 'var(--rose)', stroke: 'var(--plate)', 'stroke-width': 2
+      }));
+    });
+  }
+
+  $('reliability-caption').innerHTML =
+    'Rose dots are the ' + bins.length + ' non-empty bins of the out-of-fold predictions; the dashed line is where a perfectly calibrated model would sit. ' +
+    'Expected calibration error <b>' + esc(ci(condition.ece, 3)) + '</b>, Brier <b>' + esc(ci(condition.brier, 3)) + '</b>. ' +
+    'The ' + esc(condition.cv.calibration_method) + ' calibrator was fitted inside cross-validation, moving ECE from ' +
+    fixed(condition.cv.ece_uncalibrated, 3) + ' to ' + fixed(condition.cv.ece_calibrated, 3) + '.';
+}
+
+function drawDca() {
+  var condition = BY_SLUG[labSlug];
+  var host = $('dca-frame');
+  var curve = condition.net_benefit;
+  var xs = curve.map(function (row) { return row.threshold; });
+  var model = curve.map(function (row) { return [row.threshold, row.model]; });
+  var all = curve.map(function (row) { return [row.threshold, row.treat_all]; });
+  var none = curve.map(function (row) { return [row.threshold, row.treat_none]; });
+
+  var top = Math.max.apply(null, model.concat(all).map(function (p) { return p[1]; }));
+  var yMax = Math.max(0.02, top * 1.15);
+  var yMin = -yMax * 0.6;
+
+  if (HAVE_CHARTJS) {
+    host.innerHTML = '<canvas></canvas>';
+    var ink = chartInk();
+    if (dcaChart) { dcaChart.destroy(); }
+    var marker = {
+      id: 'thresholdMarker',
+      afterDatasetsDraw: function (chart) {
+        var scale = chart.scales.x;
+        var x = scale.getPixelForValue(threshold);
+        var ctx = chart.ctx;
+        ctx.save();
+        ctx.strokeStyle = ink.ink;
+        ctx.setLineDash([2, 3]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, chart.chartArea.top);
+        ctx.lineTo(x, chart.chartArea.bottom);
+        ctx.stroke();
+        ctx.restore();
+      }
+    };
+    dcaChart = new Chart(host.querySelector('canvas'), {
+      type: 'line',
+      data: {
+        labels: xs,
+        datasets: [
+          { label: 'This model', data: curve.map(function (r) { return r.model; }), borderColor: ink.rose, borderWidth: 2, pointRadius: 0, tension: 0.15 },
+          { label: 'Treat everyone', data: curve.map(function (r) { return r.treat_all; }), borderColor: ink.ink3, borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0 },
+          { label: 'Treat no one', data: curve.map(function (r) { return r.treat_none; }), borderColor: ink.ink3, borderWidth: 1.5, borderDash: [1, 4], pointRadius: 0 }
+        ]
+      },
+      options: {
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: { type: 'linear', min: 0, max: 1, title: { display: true, text: 'Threshold probability', color: ink.ink3 }, grid: { color: ink.grid }, ticks: { color: ink.ink3 } },
+          y: { min: yMin, max: yMax, title: { display: true, text: 'Net benefit', color: ink.ink3 }, grid: { color: ink.grid }, ticks: { color: ink.ink3 } }
+        },
+        plugins: { legend: { labels: { color: ink.ink2, boxHeight: 1, boxWidth: 24 } } }
+      },
+      plugins: [marker]
+    });
+  } else {
+    var frame = svgFrame(host, [0, 1], [yMin, yMax], [0, 0.25, 0.5, 0.75, 1], [yMin, 0, yMax], 'Threshold probability', 'Net benefit');
+    svgPath(frame, none, 'var(--ink-3)', '1 4', 1.5);
+    svgPath(frame, all, 'var(--ink-3)', '6 4', 1.5);
+    svgPath(frame, model, 'var(--rose)', null, 2);
+    frame.svg.appendChild(svgNode('line', {
+      x1: frame.sx(threshold).toFixed(1), y1: 14, x2: frame.sx(threshold).toFixed(1), y2: 260,
+      stroke: 'var(--ink)', 'stroke-width': 1, 'stroke-dasharray': '2 3'
+    }));
+  }
+
+  $('dca-caption').innerHTML =
+    'Net benefit at each threshold, against treating everyone and treating no one. ' +
+    'The model earns its place only where the rose line sits above both references; the dashed vertical mark is the threshold set below. ' +
+    'Legend order: <b>rose</b> this model, <b>long dash</b> treat everyone, <b>dotted</b> treat no one.';
+}
+
+function drawConfusion() {
+  var condition = BY_SLUG[labSlug];
+  var oof = condition.oof;
+  var tp = 0, fp = 0, fn = 0, tn = 0;
+  for (var i = 0; i < oof.p.length; i++) {
+    var flagged = oof.p[i] >= threshold;
+    if (oof.y[i] === 1) { if (flagged) { tp++; } else { fn++; } }
+    else if (flagged) { fp++; } else { tn++; }
+  }
+
+  var host = $('confusion');
+  host.innerHTML = '';
+  function head(text) { var cell = el('div', 'hd', text); return cell; }
+  function cell(value, label) {
+    var box = el('div', 'cell');
+    box.appendChild(el('div', 'n num', count(value)));
+    box.appendChild(el('div', 'lab', label));
+    return box;
+  }
+  host.appendChild(head(''));
+  host.appendChild(head('Flagged'));
+  host.appendChild(head('Not flagged'));
+  host.appendChild(head('Positive'));
+  host.appendChild(cell(tp, 'true positive'));
+  host.appendChild(cell(fn, 'false negative'));
+  host.appendChild(head('Negative'));
+  host.appendChild(cell(fp, 'false positive'));
+  host.appendChild(cell(tn, 'true negative'));
+
+  var precision = tp + fp ? tp / (tp + fp) : null;
+  var recall = tp + fn ? tp / (tp + fn) : null;
+  var specificity = tn + fp ? tn / (tn + fp) : null;
+  var rates = $('rates');
+  rates.innerHTML = '';
+  [['Precision', precision], ['Recall', recall], ['Specificity', specificity]].forEach(function (pair) {
+    var box = el('div', 'rate');
+    box.appendChild(el('div', 'v num', pair[1] === null ? '—' : pct(pair[1])));
+    box.appendChild(el('div', 'k', pair[0]));
+    rates.appendChild(box);
+  });
+
+  $('lab-sample-caption').textContent =
+    'Counts recomputed in this tab at every step of the slider, over ' + count(oof.n_shown) +
+    (oof.sampled
+      ? ' predictions drawn with seed ' + oof.seed + ' from all ' + count(oof.n_total) + ' out-of-fold predictions'
+      : ' out-of-fold predictions — the whole cohort') +
+    '. Out-of-fold means each prediction was made by a model that never saw that patient.';
+}
+
+function drawLab() {
+  drawReliability();
+  drawDca();
+  drawConfusion();
+}
+
+tabStrip($('lab-tabs'), function (slug) { labSlug = slug; drawLab(); }, labSlug);
+$('threshold').addEventListener('input', function (event) {
+  threshold = Number(event.target.value);
+  $('threshold-readout').textContent = threshold.toFixed(2);
+  drawConfusion();
+  drawDca();
+});
+drawLab();
+
+/* ------------------------------------------------------------------ *
+ *  S4 — the four-hospital transfer study
+ * ------------------------------------------------------------------ */
+var SITE_NAMES = { cleveland: 'Cleveland', hungarian: 'Hungary', switzerland: 'Switzerland', va: 'VA Long Beach' };
+function siteName(key) { return SITE_NAMES[key] || key; }
+var transferMode = 'naive';
+
+(function transferFlow() {
+  var host = $('transfer-flow');
+  var external = NG.external;
+  var origin = el('div', 'origin');
+  origin.appendChild(el('span', 'eyebrow', 'Fitted here'));
+  origin.appendChild(el('div', 't', siteName(external.training_site)));
+  origin.appendChild(el('div', 'sub', count(external.training_n) + ' patients'));
+  host.appendChild(origin);
+  host.appendChild(el('span', 'arrow', '——▶'));
+  Object.keys(external.sites).forEach(function (key) {
+    var site = external.sites[key];
+    var box = el('div', 'origin');
+    box.style.borderColor = 'var(--rule)';
+    box.appendChild(el('span', 'eyebrow', 'Tested here'));
+    box.appendChild(el('div', 't', siteName(key)));
+    box.appendChild(el('div', 'sub', count(site.n) + ' patients · ' + pct(site.prevalence) + ' positive'));
+    host.appendChild(box);
+  });
+})();
+
+function drawSites() {
+  var external = NG.external;
+  var host = $('site-cards');
+  host.innerHTML = '';
+  Object.keys(external.sites).forEach(function (key) {
+    var site = external.sites[key];
+    var block = site[transferMode];
+    var card = el('div', 'site-card');
+    card.appendChild(el('h3', null, siteName(key)));
+    card.appendChild(el('div', 'sub', count(site.n_evaluation) + ' evaluated · ' + pct(site.prevalence) + ' positive'));
+
+    [['ROC-AUC', block.roc_auc, 3], ['Calibration error (ECE)', block.ece, 3]].forEach(function (row) {
+      var metric = el('div', 'metric');
+      metric.appendChild(el('div', 'k', row[0]));
+      metric.appendChild(el('div', 'v num', fixed(row[1][0], row[2])));
+      metric.appendChild(el('div', 'ci num', '95% ' + fixed(row[1][1], row[2]) + '–' + fixed(row[1][2], row[2])));
+      if (transferMode === 'recalibrated') {
+        var before = site.naive[row[0] === 'ROC-AUC' ? 'roc_auc' : 'ece'][0];
+        var delta = row[1][0] - before;
+        var better = row[0] === 'ROC-AUC' ? delta > 0 : delta < 0;
+        var line = el('div', 'verdict-line');
+        line.appendChild(el('span', 'mark', Math.abs(delta) < 1e-9 ? '=' : (better ? '▼ better' : '▲ worse')));
+        line.appendChild(el('span', null, 'was ' + fixed(before, row[2])));
+        metric.appendChild(line);
+      }
+      card.appendChild(metric);
+    });
+
+    var shape = el('dl', 'kv');
+    shape.style.marginTop = '1.1rem';
+    [
+      ['Calibration intercept', fixed(block.calibration_intercept, 3)],
+      ['Calibration slope', fixed(block.calibration_slope, 3)],
+      ['Brier', ci(block.brier, 3)]
+    ].forEach(function (pair) {
+      shape.appendChild(el('dt', null, pair[0]));
+      shape.appendChild(el('dd', 'num', pair[1]));
+    });
+    card.appendChild(shape);
+    host.appendChild(card);
+  });
+
+  $('transfer-caption').textContent =
+    'Intercept recalibration fits a single offset on ' + pct(NG.external.calibration_split_fraction, 0) +
+    ' of each site’s patients and is scored on the rest, so the repair is never measured on the rows that paid for it. ' +
+    'Intervals are ' + count(NG.external.n_boot) + ' bootstrap resamples. A perfectly calibrated site would read intercept 0 and slope 1.';
+}
+
+Array.prototype.forEach.call($('transfer-toggle').children, function (button) {
+  button.addEventListener('click', function () {
+    transferMode = button.getAttribute('data-mode');
+    Array.prototype.forEach.call($('transfer-toggle').children, function (node) {
+      node.setAttribute('aria-pressed', node === button ? 'true' : 'false');
+    });
+    drawSites();
+  });
+});
+drawSites();
+
+(function availability() {
+  var data = NG.external.availability;
+  var table = $('availability-table');
+  var head = table.querySelector('thead');
+  var body = table.querySelector('tbody');
+  var headRow = el('tr');
+  headRow.appendChild(el('th', null, 'Site'));
+  headRow.appendChild(el('th', null, 'Patients'));
+  data.columns.forEach(function (column) { headRow.appendChild(el('th', null, column)); });
+  Array.prototype.forEach.call(headRow.children, function (cell) { cell.setAttribute('scope', 'col'); });
+  head.appendChild(headRow);
+
+  data.rows.forEach(function (row) {
+    var tr = el('tr');
+    tr.appendChild(el('td', null, siteName(row.site)));
+    tr.appendChild(el('td', 'num', count(row.n)));
+    data.columns.forEach(function (column) {
+      var share = row.unusable[column];
+      var cell = el('td', 'num', pct(share));
+      if (share >= 1) { cell.style.color = 'var(--rose)'; cell.style.fontWeight = '600'; }
+      tr.appendChild(cell);
+    });
+    body.appendChild(tr);
+  });
+
+  $('availability-caption').textContent =
+    'Share of each column the model cannot use, measured on the cleaned cohort after sentinel-coded zeros were converted to missing. ' +
+    'These three columns are why a model fitted at one hospital meets a different instrument at the next: what was measured is itself site-dependent.';
+})();
+
+(function findings() {
+  var external = NG.external;
+  var swiss = external.availability.rows.filter(function (row) { return row.site === 'switzerland'; })[0];
+  var sentinel = $('finding-sentinel');
+  sentinel.innerHTML =
+    '<span class="eyebrow">Finding · the zero that was not a zero</span>' +
+    '<h3>An entire hospital recorded cholesterol as 0 mg/dL</h3>' +
+    '<p>Switzerland’s cholesterol column is <b>' + esc(pct(swiss.unusable.chol)) + '</b> sentinel-coded zeros — a placeholder for “not taken”, stored in the same column as a measurement. ' +
+    'Read literally, every one of those ' + count(swiss.n) + ' patients has cholesterol incompatible with being alive, and a model fitted where the column is genuine would read the whole site as extreme hypocholesterolaemia and answer confidently about it.</p>' +
+    '<p>The sentinel detector flags a column whose zeros are implausible for the quantity it holds; cleaning converts them to missing, and the missing branch of every tree then routes those patients the way it routes any unmeasured value. That is the difference between a silent error and a stated one.</p>';
+
+  var va = external.sites.va;
+  if (!va) { return; }
+  var vaNode = $('finding-va');
+  var worse = va.recalibrated.ece[0] > va.naive.ece[0];
+  vaNode.innerHTML =
+    '<span class="eyebrow">Negative result · reported, not buried</span>' +
+    '<h3>Recalibration made VA Long Beach ' + (worse ? 'worse' : 'better') + '</h3>' +
+    '<p>Intercept recalibration repaired Hungary (ECE ' + fixed(external.sites.hungarian.naive.ece[0], 3) + ' → ' +
+    fixed(external.sites.hungarian.recalibrated.ece[0], 3) + ') and Switzerland (' +
+    fixed(external.sites.switzerland.naive.ece[0], 3) + ' → ' + fixed(external.sites.switzerland.recalibrated.ece[0], 3) +
+    '). At VA Long Beach it went the other way: <b>' + fixed(va.naive.ece[0], 3) + ' → ' + fixed(va.recalibrated.ece[0], 3) + '</b>, ' +
+    'with intervals of ' + esc(ci(va.naive.ece, 3)) + ' and ' + esc(ci(va.recalibrated.ece, 3)) + ' that overlap heavily.</p>' +
+    '<p>The reason is in the slope, not the offset. VA’s calibration slope is <b>' + fixed(va.naive.calibration_slope, 3) + '</b> on the evaluation split and ' +
+    fixed(va.naive_all_rows.calibration_slope, 3) + ' across all ' + count(va.n) + ' rows: the model’s probabilities are too spread out, not merely shifted. ' +
+    'An intercept-only correction slides the whole curve sideways and cannot change its steepness, so it moved a curve that needed rotating. ' +
+    'The honest reading is that a single offset is the right repair for a prevalence shift and the wrong repair for a slope problem — and that a repair whose interval overlaps the thing it repaired has not been shown to work.</p>';
+})();
+
+/* ------------------------------------------------------------------ *
+ *  Methods
+ * ------------------------------------------------------------------ */
+(function methods() {
+  var first = CONDITIONS[0];
+  var host = $('methods-grid');
+  [
+    ['Nested cross-validation',
+      'Hyperparameters are chosen in an inner ' + first.cv.inner_n_splits + '-fold loop and scored in an outer ' +
+      first.cv.outer_n_splits + '-fold loop, so no fold ever grades a choice it helped make. Every published metric is out-of-fold. Seed ' + first.cv.seed + '.'],
+    ['Cross-fitted calibration',
+      'The calibrator is fitted strictly inside cross-validation, never on the rows it is later scored against. Fitting it on the whole cohort would make every reliability diagram on this page look better than the model is.'],
+    ['Conformal prediction',
+      'Split conformal at α = ' + fixed(first.conformal.alpha, 2) + ' gives each condition its own nonconformity threshold and lets the model answer “uncertain” when both labels stay plausible. Where that threshold collapses to zero the model can never use the answer, and the calculator says so on that condition rather than letting the silence read as confidence.'],
+    ['Bootstrap intervals',
+      count(NG.external.n_boot) + ' resamples behind every interval on this page. A point estimate from a few hundred patients is a rumour; the interval is the finding.'],
+    ['Leakage sentinels',
+      'Detectors for resampling before the split, fitting on test rows, duplicates across folds and sentinel-coded zeros. Each protection has a test that turns red when the protection is deliberately broken, so a passing suite means the guard works rather than that it exists.'],
+    ['Browser parity',
+      'The tree walker in this page is byte-identical to the one scored against the Python reference on 200 seeded cases per condition, including rows with missing values. Append ?selftest=1 to this page’s address to re-run every model’s canaries here and read the result in the tab title.']
+  ].forEach(function (pair) {
+    var box = el('div', 'method');
+    box.appendChild(el('h3', null, pair[0]));
+    box.appendChild(el('p', null, pair[1]));
+    host.appendChild(box);
+  });
+})();
+
+/* ------------------------------------------------------------------ *
+ *  Provenance
+ * ------------------------------------------------------------------ */
+(function provenance() {
+  var prov = NG.provenance;
+  var host = $('prov-hashes');
+  host.innerHTML = '';
+
+  function line(key, value) {
+    var row = el('div');
+    row.style.marginBottom = '0.5rem';
+    if (key) { row.appendChild(el('div', 'k', key)); }
+    row.appendChild(el('div', 'h', value));
+    host.appendChild(row);
+  }
+  line('', prov.pubkey_fingerprint);
+
+  var gap = el('div');
+  gap.style.height = '1.1rem';
+  host.appendChild(gap);
+  host.appendChild(el('span', 'eyebrow', 'Model bundles · SHA-256'));
+  CONDITIONS.forEach(function (condition) {
+    line(condition.slug, condition.sha256);
+  });
+
+  var note = el('p', 'caption');
+  note.textContent = 'Each digest above is the value provenance/manifest.json already carries for that bundle, so you can grep for it there and then check the signature over the whole manifest with the command on the left. ' +
+    'This page deliberately does not print the manifest’s own hash: the page is itself a signed artifact, so signing it changes the manifest, which would change the hash printed here, which would change the page. There is no fixpoint, and a number that is wrong the moment it is signed is worse than none.';
+  host.appendChild(note);
+
+  $('colophon-commit').textContent = 'built from ' + prov.commit.slice(0, 12);
+})();
+
+/* ------------------------------------------------------------------ *
+ *  Redraw the Chart.js figures when the plate changes; the SVG figures and
+ *  the coxcomb are written against CSS variables and need no redraw.
+ * ------------------------------------------------------------------ */
+onThemeChange(function () { if (HAVE_CHARTJS) { drawReliability(); drawDca(); } });
+
+/* ------------------------------------------------------------------ *
+ *  ?selftest=1 — re-score every model's canaries through this page's own
+ *  walker and put the worst deviation in the tab title, so a headless
+ *  browser can assert on it without a screenshot.
+ * ------------------------------------------------------------------ */
+(function selftest() {
+  if (new URLSearchParams(location.search).get('selftest') !== '1') { return; }
+  var TOLERANCE = 1e-12;
+  var worst = 0;
+  var worstSlug = '';
+  CONDITIONS.forEach(function (condition) {
+    var model = condition.model;
+    for (var i = 0; i < model.canaries.inputs.length; i++) {
+      var diff = Math.abs(predict(model, model.canaries.inputs[i]).p_cal - model.canaries.p_cal[i]);
+      if (diff > worst) { worst = diff; worstSlug = condition.slug; }
+    }
+  });
+  var reading = worst.toExponential(3);
+  var passed = worst <= TOLERANCE;
+  document.title = passed
+    ? 'NIGHTINGALE SELFTEST PASS max=' + reading
+    : 'NIGHTINGALE SELFTEST FAIL max=' + reading + ' at ' + worstSlug;
+  var banner = $('selftest-banner');
+  banner.className = 'on';
+  banner.textContent = document.title + ' · ' + CONDITIONS.length + ' conditions × ' +
+    CONDITIONS[0].model.canaries.inputs.length + ' canaries · tolerance 1e-12';
+})();
+</script>
+</body>
+</html>
