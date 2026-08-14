@@ -51,10 +51,10 @@ is tested on, and the comparison happens in the space where tampering is
 actually visible.
 
 The private signing key never lives in this repository. It is generated
-once, kept at a path outside the checkout (default
-``~/.claude/keys/nightingale_ed25519.pem`` on the machine this project is
-signed from, overridable via ``NIGHTINGALE_SIGNING_KEY`` or an explicit
-argument), and only ``provenance/pubkey.pem`` -- the public half -- is
+once, kept in a key directory outside the checkout on the machine this
+project is signed from, and supplied at signing time via
+``NIGHTINGALE_SIGNING_KEY`` or an explicit ``key_path``
+argument; only ``provenance/pubkey.pem`` -- the public half -- is
 committed.
 """
 

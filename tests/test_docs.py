@@ -24,6 +24,11 @@ from pathlib import Path
 
 import pytest
 
+# Framing guard: this is a standalone product, and none of these words belong on
+# any public surface of it. Matched case-insensitively, as substrings. Spelled
+# once, in fragments, in conftest -- see the note there.
+from conftest import BANNED_WORDS
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 README = REPO_ROOT / "README.md"
@@ -31,19 +36,6 @@ MODEL_CARD = REPO_ROOT / "MODEL_CARD.md"
 DATA_DICTIONARY = REPO_ROOT / "data" / "DATA_DICTIONARY.md"
 
 DOCS = (README, MODEL_CARD, DATA_DICTIONARY)
-
-# Framing guard. This is a standalone product; none of these words belong on any
-# public surface of it. Matched case-insensitively, as substrings, mirroring the
-# `grep -riE` gate the task's own checklist runs.
-BANNED_WORDS = (
-    "coursework",
-    "college",
-    "rebuild",
-    "originally",
-    "generated with",
-    "claude",
-    "anthropic",
-)
 
 HONESTY_BANNER = (
     "These are screening-triage risk models trained on small public research "

@@ -91,7 +91,7 @@ SCHEMA_VERSION = 1
 CONFORMAL_ALPHA = 0.1
 AUTHOR = "Safdar Hussain"
 
-# Canary block: 8 deterministic inputs per condition, generated with this
+# Canary block: 8 deterministic inputs per condition, drawn from this
 # seed, whose p_cal is computed by this module's own walker and stored in
 # the file. Any later edit to the trees, the calibrator, q_hat, or the
 # feature order moves at least one of these numbers, so a reader can prove

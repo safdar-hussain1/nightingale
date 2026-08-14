@@ -975,8 +975,11 @@ function score() {
   var supplied = row.filter(function (value) { return value !== null; }).length;
   var out = predict(model, row);
 
-  /* "What changes if this field is unknown": re-score the same row with one
-     field blanked, and report the movement. It is a leave-one-out difference
+  /* "What each measurement contributes": re-score the same row with one field
+     blanked, and report how far the estimate moves BECAUSE the field is
+     measured -- delta is p_cal(measured) - p_cal(masked), so a negative delta
+     means having the measurement lowers the risk estimate relative to not
+     having it. It is a leave-one-out difference
      against the model's own missing branch, not an attribution method -- it
      answers "how much is this measurement buying me", which is the question
      someone filling in a form is actually asking. */
@@ -1083,7 +1086,7 @@ function score() {
   host.appendChild(kv);
 
   var contrib = el('div', 'contrib');
-  contrib.appendChild(el('span', 'eyebrow', 'What changes if this field is unknown'));
+  contrib.appendChild(el('span', 'eyebrow', 'What each measurement contributes'));
   if (!contributions.length) {
     contrib.appendChild(el('p', 'caption', 'None of the ' + supplied + ' fields you have filled in moves this estimate by as much as a tenth of a point. ' +
       'With everything else unknown, the model is being carried by its missing branches, not by what you measured.'));
@@ -1109,7 +1112,7 @@ function score() {
       line.appendChild(el('div', 'delta', (item.delta >= 0 ? '+' : '−') + Math.abs(item.delta * 100).toFixed(1) + ' pp'));
       contrib.appendChild(line);
     });
-    contrib.appendChild(el('p', 'caption', 'Percentage points the calibrated risk moves when that one field is set back to “not measured”. Rose raises the estimate, slate lowers it.' +
+    contrib.appendChild(el('p', 'caption', 'Percentage points the calibrated risk moves because this field is measured rather than unknown. Rose raises the estimate, slate lowers it.' +
       (inert ? ' ' + inert + ' other supplied field' + (inert === 1 ? '' : 's') + ' moved it by less than a tenth of a point.' : '')));
   }
   host.appendChild(contrib);
@@ -1774,7 +1777,12 @@ drawSites();
   var worse = va.recalibrated.ece[0] > va.naive.ece[0];
   vaNode.innerHTML =
     '<span class="eyebrow">Negative result · reported, not buried</span>' +
-    '<h3>Recalibration made VA Long Beach ' + (worse ? 'worse' : 'better') + '</h3>' +
+    /* Point-worse is not the same claim as demonstrably-worse: the two ECE
+       intervals overlap heavily, which the body paragraph says outright. The
+       heading has to make the weaker claim the data supports, or the page
+       contradicts itself two lines later (and contradicts the README). */
+    '<h3>' + (worse ? 'Recalibration did not demonstrably help VA Long Beach'
+                    : 'Recalibration improved VA Long Beach') + '</h3>' +
     '<p>Intercept recalibration repaired Hungary (ECE ' + fixed(external.sites.hungarian.naive.ece[0], 3) + ' → ' +
     fixed(external.sites.hungarian.recalibrated.ece[0], 3) + ') and Switzerland (' +
     fixed(external.sites.switzerland.naive.ece[0], 3) + ' → ' + fixed(external.sites.switzerland.recalibrated.ece[0], 3) +

@@ -36,15 +36,17 @@ exactly one byte range even when nothing else changed. Decision made here:
 ``generated_utc`` is omitted from ``metrics.json`` entirely; the actual UTC
 timestamp of this run is instead written to the separate, UNSIGNED
 ``models/run_meta.json`` (one file for the whole run, not per-condition),
-alongside the exact command and per-condition wall-clock. See the task-8
-report and the numbers file for the full rationale.
+alongside the (repo-relative) command and per-condition wall-clock. That file
+merges across invocations -- ``--slug X`` keeps the other five conditions'
+recorded times -- so it also records a ``runs`` list, and its ``started_utc``
+is the earliest start still contributing a time, keeping the recorded span
+consistent with ``total_wall_seconds``.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
 from collections import Counter
 from datetime import datetime, timezone
@@ -450,24 +452,66 @@ def run(slugs: list[str]) -> dict:
     # recorded wall-clock from a prior full run. Only the slugs actually
     # trained THIS invocation get their per-condition entry replaced.
     run_meta_path = MODELS_ROOT / "run_meta.json"
-    if run_meta_path.exists():
-        existing = json.loads(run_meta_path.read_text())
-        merged_seconds = dict(existing.get("per_condition_wall_seconds", {}))
-    else:
-        merged_seconds = {}
+    existing = json.loads(run_meta_path.read_text()) if run_meta_path.exists() else {}
+    merged_seconds = dict(existing.get("per_condition_wall_seconds", {}))
     merged_seconds.update(per_condition_seconds)
     total_seconds = sum(merged_seconds.values())
 
+    # The merge above can make ``total_wall_seconds`` describe MORE than this
+    # invocation, so the timestamps have to describe the same span it does. An
+    # earlier version paired a merged total with this invocation's own start
+    # and finish, which after a one-slug rerun claimed 365s of work inside a
+    # 10s window -- arithmetically impossible, and the kind of incoherence a
+    # provenance file exists to prevent. Every invocation that contributes a
+    # per-condition time appends a record to ``runs``; ``started_utc`` is the
+    # earliest of those, so the recorded span always covers the recorded work.
+    this_run = {
+        "started_utc": run_started.isoformat(),
+        "finished_utc": run_finished.isoformat(),
+        "slugs": sorted(per_condition_seconds),
+        "wall_seconds": (run_finished - run_started).total_seconds(),
+    }
+    if set(merged_seconds) == set(per_condition_seconds):
+        # Nothing was carried forward: this invocation IS the whole record.
+        runs = [this_run]
+    else:
+        prior = list(existing.get("runs") or [])
+        if not prior and existing.get("started_utc"):
+            # A run_meta written before ``runs`` existed: keep its span so the
+            # carried-forward per-condition times stay accounted for.
+            prior = [
+                {
+                    "started_utc": existing["started_utc"],
+                    "finished_utc": existing.get("finished_utc", existing["started_utc"]),
+                    "slugs": sorted(existing.get("per_condition_wall_seconds", {})),
+                    "wall_seconds": existing.get("total_wall_seconds"),
+                }
+            ]
+        runs = prior + [this_run]
+
     run_meta = {
         "generated_utc": run_finished.isoformat(),
-        "command": "PYTHONPATH=src " + sys.executable + " scripts/train_all.py",
+        # Repo-relative on purpose: the absolute interpreter path of whichever
+        # machine trained the models is machine-specific noise in a file whose
+        # job is to be checkable by someone else.
+        "command": "PYTHONPATH=src python scripts/train_all.py",
         "seed": SEED,
         "n_boot": N_BOOT,
         "conformal_alpha": CONFORMAL_ALPHA,
         "subgroup_min_n": SUBGROUP_MIN_N,
         "per_condition_wall_seconds": merged_seconds,
         "total_wall_seconds": total_seconds,
-        "started_utc": run_started.isoformat(),
+        "runs": runs,
+        "note": (
+            "total_wall_seconds sums per_condition_wall_seconds, which may carry "
+            "entries from earlier invocations (see runs). started_utc is the start "
+            "of the earliest invocation still contributing a time; finished_utc is "
+            "the end of this one."
+        ),
+        "started_utc": min(
+            (run["started_utc"] for run in runs),
+            key=lambda stamp: datetime.fromisoformat(stamp),
+        ),
         "finished_utc": run_finished.isoformat(),
     }
     with open(run_meta_path, "w") as f:

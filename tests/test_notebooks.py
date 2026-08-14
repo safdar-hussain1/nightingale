@@ -27,6 +27,10 @@ from pathlib import Path
 
 import pytest
 
+# Same discipline as every other public surface here: no AI attribution, no trace
+# of how this project's writing got made. Spelled once, in fragments, in conftest.
+from conftest import BANNED_WORDS
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOKS_ROOT = REPO_ROOT / "notebooks"
 
@@ -34,18 +38,6 @@ NOTEBOOK_PATHS = [
     NOTEBOOKS_ROOT / "01_six_conditions.ipynb",
     NOTEBOOKS_ROOT / "02_external_validation.ipynb",
 ]
-
-# Same discipline as the rest of this project's public surfaces (README, dashboard,
-# LinkedIn copy): no AI attribution, no trace of how this project's writing got made.
-BANNED_WORDS = (
-    "coursework",
-    "college",
-    "rebuild",
-    "originally",
-    "generated with",
-    "claude",
-    "anthropic",
-)
 
 
 def _load_notebook(path: Path) -> dict:

@@ -1,19 +1,35 @@
 {
-  "command": "PYTHONPATH=src /Users/safdarhussain/Desktop/Projects/GitHub/.venv/bin/python scripts/train_all.py",
+  "command": "PYTHONPATH=src python scripts/train_all.py",
   "conformal_alpha": 0.1,
-  "finished_utc": "2026-08-13T16:48:49.290072+00:00",
-  "generated_utc": "2026-08-13T16:48:49.290072+00:00",
+  "finished_utc": "2026-08-14T08:07:17.132956+00:00",
+  "generated_utc": "2026-08-14T08:07:17.132956+00:00",
   "n_boot": 2000,
+  "note": "total_wall_seconds sums per_condition_wall_seconds, which may carry entries from earlier invocations (see runs). started_utc is the start of the earliest invocation still contributing a time; finished_utc is the end of this one.",
   "per_condition_wall_seconds": {
-    "breast-cancer": 13.236818790435791,
-    "cervical-cancer": 8.967296123504639,
-    "diabetes": 301.591096162796,
-    "heart-disease": 18.30247211456299,
-    "kidney-disease": 10.403198957443237,
-    "liver-disease": 12.514096975326538
+    "breast-cancer": 13.103940963745117,
+    "cervical-cancer": 9.089508056640625,
+    "diabetes": 322.23048305511475,
+    "heart-disease": 19.292364835739136,
+    "kidney-disease": 11.213285207748413,
+    "liver-disease": 13.642360210418701
   },
+  "runs": [
+    {
+      "finished_utc": "2026-08-14T08:07:17.132956+00:00",
+      "slugs": [
+        "breast-cancer",
+        "cervical-cancer",
+        "diabetes",
+        "heart-disease",
+        "kidney-disease",
+        "liver-disease"
+      ],
+      "started_utc": "2026-08-14T08:00:48.558818+00:00",
+      "wall_seconds": 388.574138
+    }
+  ],
   "seed": 42,
-  "started_utc": "2026-08-13T16:48:38.886599+00:00",
+  "started_utc": "2026-08-14T08:00:48.558818+00:00",
   "subgroup_min_n": 40,
-  "total_wall_seconds": 365.0149791240692
+  "total_wall_seconds": 388.57194232940674
 }

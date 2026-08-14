@@ -28,6 +28,28 @@ import pytest
 from nightingale.conditions import CONDITIONS
 from nightingale.fetch import RAW_ROOT
 
+# ---------------------------------------------------------------------------
+# Framing guard vocabulary.
+#
+# These are not rude words; they are words that would mis-describe what this
+# project is, or that describe how a file got written rather than what it does.
+# ``tests/test_public_surface.py`` greps EVERY tracked text file for them, this
+# file included, so each entry is assembled from fragments: a literal spelling
+# here would make the guard fail on its own definition, and the fix for that is
+# never to narrow the guard. Every test module that needs the list imports it
+# from here rather than re-spelling it.
+# ---------------------------------------------------------------------------
+BANNED_WORDS = (
+    "course" + "work",
+    "col" + "lege",
+    "re" + "build",
+    "origin" + "ally",
+    "generated" + " with",
+    "clau" + "de",
+    "anthro" + "pic",
+    "co-" + "authored",
+)
+
 
 def raw_data_available(slug: str) -> bool:
     """True iff every raw file ``fetch(slug)`` would land is present on disk."""

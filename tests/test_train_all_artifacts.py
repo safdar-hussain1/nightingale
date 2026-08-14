@@ -27,6 +27,7 @@ the fact.
 """
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -250,6 +251,40 @@ def test_run_meta_json_covers_every_condition():
     assert data["total_wall_seconds"] > 0
     assert data["conformal_alpha"] == pytest.approx(0.1)
     assert data["seed"] == 42
+
+
+def test_run_meta_span_is_consistent_with_the_wall_clock_it_reports():
+    """The recorded span must cover the recorded work.
+
+    ``per_condition_wall_seconds`` merges across invocations (``--slug X``
+    keeps the other five entries), so a naive pairing of a merged total with
+    only the LAST invocation's timestamps once claimed 365s of training inside
+    a 10s window. Every invocation contributing a time appends to ``runs``, and
+    ``started_utc`` is the earliest of those, which makes the inequality below
+    an invariant rather than a coincidence.
+    """
+    data = json.loads((MODELS_ROOT / "run_meta.json").read_text())
+    started = datetime.fromisoformat(data["started_utc"])
+    finished = datetime.fromisoformat(data["finished_utc"])
+    span = (finished - started).total_seconds()
+    assert span >= data["total_wall_seconds"], (
+        f"run_meta claims {data['total_wall_seconds']:.1f}s of training inside a "
+        f"{span:.1f}s window"
+    )
+
+    runs = data["runs"]
+    assert runs, "run_meta records no runs"
+    covered = {slug for run in runs for slug in run["slugs"]}
+    assert covered == set(data["per_condition_wall_seconds"]), (
+        "every per-condition time must be attributable to a recorded run"
+    )
+    assert datetime.fromisoformat(runs[0]["started_utc"]) == started
+
+
+def test_run_meta_command_is_repo_relative():
+    """No machine-specific interpreter path in a file meant to be checkable."""
+    data = json.loads((MODELS_ROOT / "run_meta.json").read_text())
+    assert data["command"] == "PYTHONPATH=src python scripts/train_all.py"
 
 
 def test_generated_utc_is_absent_from_every_metrics_json():

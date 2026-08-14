@@ -23,6 +23,11 @@ from pathlib import Path
 
 import pytest
 
+# Framing words that must never reach a public surface: not rude words, but words
+# that would mis-describe what this project is. Spelled once, in fragments, in
+# conftest -- see the note there.
+from conftest import BANNED_WORDS
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BUILD_SCRIPT = REPO_ROOT / "scripts" / "build_dashboard.py"
 TEMPLATE = REPO_ROOT / "scripts" / "dashboard_template.html"
@@ -46,19 +51,6 @@ HONESTY_BANNER = (
     "datasets. They are not diagnostic devices and must not be used for medical "
     "decisions. The diabetes labels are self-reported survey responses. The "
     "cervical-cancer cohort has 55 positive biopsies."
-)
-
-# Framing words that must never reach a public surface. These are not rude
-# words; they are words that would mis-describe what this project is, and a
-# grep is the only reliable way to keep them out of a generated file.
-BANNED_WORDS = (
-    "coursework",
-    "college",
-    "rebuild",
-    "originally",
-    "generated with",
-    "claude",
-    "anthropic",
 )
 
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
