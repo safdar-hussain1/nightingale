@@ -186,8 +186,9 @@ heart-disease: fetched -> /path/to/nightingale/data/raw/heart-disease
 heart-disease: cleaned -> /path/to/nightingale/data/cleaned/heart-disease.csv.gz
 ```
 
-Retraining one condition (the full six-condition run takes 365.0s end to end;
-heart disease alone is the 18–20s below):
+Retraining one condition (the full six-condition run takes about six and a
+half minutes end to end on a laptop — the committed `run_meta.json` records
+the exact wall-clock; heart disease alone is the 18–20s below):
 
 ```bash
 nightingale train --condition heart-disease
