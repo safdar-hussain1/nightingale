@@ -42,6 +42,7 @@ from cryptography.hazmat.primitives.serialization import (
 from nightingale.export import REPO_ROOT, _LEAF
 from nightingale.provenance import (
     ARTIFACT_GLOBS,
+    DEFAULT_PUBKEY_PATH,
     FingerprintReport,
     VerifyReport,
     build_manifest,
@@ -352,6 +353,27 @@ def test_verify_edited_meta_invalidates_signature(tmp_path):
     report = verify(root, pub, manifest_path=out_path)
     assert report.signature_valid is False
     assert report.ok is False
+
+
+# --------------------------------------------------------------------------
+# The committed manifest, against the committed repo -- no synthetic
+# fixtures. Every other verify() test above signs its own manifest for a
+# tmp_path tree, so none of them ever check that the actual, committed
+# provenance/manifest.json currently validates against the actual,
+# committed models/ tree it claims to cover. Tampering with a real,
+# committed artifact would be invisible without this test (mutation sweep
+# task 17, gap 2).
+# --------------------------------------------------------------------------
+
+
+def test_verify_real_committed_manifest_against_real_repo():
+    report = verify(REPO_ROOT, DEFAULT_PUBKEY_PATH)
+    assert report.signature_valid is True
+    assert report.ok is True
+    assert set(report.artifacts.values()) == {"OK"}
+    # Pin the artifact count so a silently shrinking manifest (e.g. globs
+    # quietly matching fewer files) also fails this test.
+    assert len(report.artifacts) == 34
 
 
 # --------------------------------------------------------------------------

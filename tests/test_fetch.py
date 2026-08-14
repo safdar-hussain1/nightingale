@@ -18,6 +18,7 @@ import pandas as pd
 import pytest
 
 import nightingale.fetch as fetch
+from conftest import skip_if_raw_missing
 from nightingale.conditions import CONDITIONS
 
 
@@ -202,6 +203,30 @@ def test_zip_mode_missing_expected_file_raises_integrity_error(tmp_path, monkeyp
 def test_raw_root_resolves_under_repo_root():
     assert fetch.RAW_ROOT.name == "raw"
     assert fetch.RAW_ROOT.parent.name == "data"
+
+
+# ---------------------------------------------------------------------------
+# The real PINNED_SHA256 dict against the real, already-cached data/raw/ --
+# no monkeypatching. Every other test in this file substitutes its own pins
+# before calling fetch(), so none of them ever check that the committed
+# PINNED_SHA256 entries actually match the committed(-by-fetch) cache on
+# disk. A tampered or wrong pin for an already-cached slug would be
+# invisible without this test (mutation sweep task 17, gap 1).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("slug", sorted(CONDITIONS.keys()))
+def test_real_pinned_sha256_matches_cached_raw_files(slug):
+    skip_if_raw_missing(slug)
+    condition = CONDITIONS[slug]
+    slug_dir = fetch.RAW_ROOT / slug
+    pins = fetch.PINNED_SHA256[slug]
+    for filename in condition.raw_files:
+        actual = _sha256((slug_dir / filename).read_bytes())
+        assert actual == pins[filename], (
+            f"{slug}/{filename}: cached file's sha256 does not match the "
+            f"real PINNED_SHA256 entry"
+        )
 
 
 # ---------------------------------------------------------------------------
