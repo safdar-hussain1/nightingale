@@ -1,0 +1,304 @@
+# Nightingale — calibrated clinical risk models
+# Copyright (c) 2026 Safdar Hussain · https://github.com/safdar-hussain1/nightingale
+# SPDX-License-Identifier: MIT
+"""Tests for :mod:`nightingale.provenance`: signed manifest + fingerprint.
+
+Two separate claims, two separate mechanisms:
+
+1. **The manifest** proves nothing in the working tree has been altered
+   since it was signed -- a SHA-256 per artifact, Ed25519 over the sorted
+   set of hashes. ``verify`` recomputes every hash from disk and checks the
+   signature; it never regenerates an artifact to compare against, because
+   Task 10 established that regeneration is not byte-reproducible across
+   commits.
+2. **The fingerprint** proves a lone ``model.json`` -- found anywhere, under
+   any name, with its ``provenance`` block stripped -- is a copy of one of
+   this project's six trees. It works because the canary inputs and the
+   trees travel together: recomputing ``p_cal`` from the file's own trees
+   on its own canary inputs reproduces the exact vector this project
+   published for the matching condition, and reproduces nothing for any
+   other condition or for a tree that has been altered at all.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import subprocess
+from pathlib import Path
+
+import pytest
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+from nightingale.export import REPO_ROOT, _LEAF
+from nightingale.provenance import (
+    ARTIFACT_GLOBS,
+    FingerprintReport,
+    VerifyReport,
+    build_manifest,
+    canonical_json_bytes,
+    discover_artifacts,
+    fingerprint,
+    sign_manifest,
+    verify,
+)
+
+CONDITIONS_SLUGS = [
+    "breast-cancer",
+    "cervical-cancer",
+    "diabetes",
+    "heart-disease",
+    "kidney-disease",
+    "liver-disease",
+]
+
+
+def _write_keypair(tmp_path: Path) -> tuple[Path, Path]:
+    """A fresh Ed25519 keypair on disk under ``tmp_path``; returns (priv, pub)."""
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding,
+        NoEncryption,
+        PrivateFormat,
+        PublicFormat,
+    )
+
+    key = Ed25519PrivateKey.generate()
+    priv_path = tmp_path / "key.pem"
+    pub_path = tmp_path / "key.pub.pem"
+    priv_path.write_bytes(key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()))
+    pub_path.write_bytes(
+        key.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
+    )
+    return priv_path, pub_path
+
+
+def _tiny_repo(tmp_path: Path) -> Path:
+    """A minimal artifact tree under ``tmp_path`` matching the manifest globs."""
+    root = tmp_path / "repo"
+    (root / "models" / "breast-cancer").mkdir(parents=True)
+    (root / "data" / "cleaned").mkdir(parents=True)
+    (root / "models" / "breast-cancer" / "model.json").write_text('{"a": 1}')
+    (root / "models" / "breast-cancer" / "metrics.json").write_text('{"b": 2}')
+    (root / "data" / "cleaned" / "breast-cancer.csv.gz").write_bytes(b"\x1f\x8b\x00fake")
+    return root
+
+
+# --------------------------------------------------------------------------
+# canonical_json_bytes / discover_artifacts / build_manifest
+# --------------------------------------------------------------------------
+
+
+def test_canonical_json_bytes_sorted_no_whitespace():
+    payload = canonical_json_bytes({"b": 1, "a": {"z": 1, "y": 2}})
+    assert payload == b'{"a":{"y":2,"z":1},"b":1}'
+
+
+def test_discover_artifacts_only_lists_existing_files(tmp_path):
+    root = _tiny_repo(tmp_path)
+    found = discover_artifacts(root)
+    relpaths = sorted(str(p.relative_to(root)) for p in found)
+    assert relpaths == [
+        "data/cleaned/breast-cancer.csv.gz",
+        "models/breast-cancer/metrics.json",
+        "models/breast-cancer/model.json",
+    ]
+    # docs/index.html and reports/figures/*.png are absent in this tree and
+    # must not appear -- absent at signing time means not listed.
+    assert not any("docs" in r or "figures" in r for r in relpaths)
+
+
+def test_build_manifest_hashes_and_sorts(tmp_path):
+    root = _tiny_repo(tmp_path)
+    paths = discover_artifacts(root)
+    manifest = build_manifest(paths, root)
+
+    assert list(manifest["artifacts"].keys()) == sorted(manifest["artifacts"].keys())
+    expected = hashlib.sha256(
+        (root / "models" / "breast-cancer" / "model.json").read_bytes()
+    ).hexdigest()
+    assert manifest["artifacts"]["models/breast-cancer/model.json"] == expected
+    assert set(manifest["meta"]) >= {"built_utc", "commit", "author"}
+    assert manifest["meta"]["author"] == "Safdar Hussain"
+
+
+# --------------------------------------------------------------------------
+# sign / verify round trip
+# --------------------------------------------------------------------------
+
+
+def test_sign_and_verify_roundtrip_ok(tmp_path):
+    root = _tiny_repo(tmp_path)
+    priv, pub = _write_keypair(tmp_path)
+    paths = discover_artifacts(root)
+    manifest = build_manifest(paths, root)
+
+    out_path = root / "provenance" / "manifest.json"
+    written = sign_manifest(manifest, key_path=priv, out_path=out_path)
+    assert written == out_path
+    assert out_path.is_file()
+
+    report = verify(root, pub, manifest_path=out_path)
+    assert isinstance(report, VerifyReport)
+    assert report.signature_valid is True
+    assert set(report.artifacts.values()) == {"OK"}
+    assert report.ok is True
+
+
+def test_verify_flip_one_byte_marks_only_that_artifact_tampered(tmp_path):
+    root = _tiny_repo(tmp_path)
+    priv, pub = _write_keypair(tmp_path)
+    manifest = build_manifest(discover_artifacts(root), root)
+    out_path = sign_manifest(manifest, key_path=priv, out_path=root / "provenance" / "manifest.json")
+
+    target = root / "models" / "breast-cancer" / "model.json"
+    data = bytearray(target.read_bytes())
+    data[0] ^= 0xFF
+    target.write_bytes(bytes(data))
+
+    report = verify(root, pub, manifest_path=out_path)
+    assert report.artifacts["models/breast-cancer/model.json"] == "TAMPERED"
+    assert report.artifacts["models/breast-cancer/metrics.json"] == "OK"
+    assert report.artifacts["data/cleaned/breast-cancer.csv.gz"] == "OK"
+    # The manifest bytes themselves were untouched, so the signature over
+    # them is still valid -- it is the artifact hash that disagrees.
+    assert report.signature_valid is True
+    assert report.ok is False
+
+
+def test_verify_missing_artifact(tmp_path):
+    root = _tiny_repo(tmp_path)
+    priv, pub = _write_keypair(tmp_path)
+    manifest = build_manifest(discover_artifacts(root), root)
+    out_path = sign_manifest(manifest, key_path=priv, out_path=root / "provenance" / "manifest.json")
+
+    (root / "models" / "breast-cancer" / "metrics.json").unlink()
+
+    report = verify(root, pub, manifest_path=out_path)
+    assert report.artifacts["models/breast-cancer/metrics.json"] == "MISSING"
+    assert report.ok is False
+
+
+def test_verify_with_different_key_signature_invalid(tmp_path):
+    root = _tiny_repo(tmp_path)
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    priv_a, _pub_a = _write_keypair(tmp_path / "a")
+    _priv_b, pub_b = _write_keypair(tmp_path / "b")
+    manifest = build_manifest(discover_artifacts(root), root)
+    out_path = sign_manifest(
+        manifest, key_path=priv_a, out_path=root / "provenance" / "manifest.json"
+    )
+
+    report = verify(root, pub_b, manifest_path=out_path)
+    assert report.signature_valid is False
+    assert report.ok is False
+    # Artifacts on disk are untouched, so they still hash OK -- only the
+    # signature check fails.
+    assert set(report.artifacts.values()) == {"OK"}
+
+
+def test_sign_manifest_reads_key_path_from_env(tmp_path, monkeypatch):
+    root = _tiny_repo(tmp_path)
+    priv, pub = _write_keypair(tmp_path)
+    monkeypatch.setenv("NIGHTINGALE_SIGNING_KEY", str(priv))
+    manifest = build_manifest(discover_artifacts(root), root)
+
+    out_path = sign_manifest(manifest, out_path=root / "provenance" / "manifest.json")
+    report = verify(root, pub, manifest_path=out_path)
+    assert report.signature_valid is True
+
+
+# --------------------------------------------------------------------------
+# fingerprint
+# --------------------------------------------------------------------------
+
+
+def _load(slug: str) -> dict:
+    return json.loads((REPO_ROOT / "models" / slug / "model.json").read_text())
+
+
+@pytest.mark.parametrize("slug", CONDITIONS_SLUGS)
+def test_fingerprint_matches_own_condition(tmp_path, slug):
+    report = fingerprint(REPO_ROOT / "models" / slug / "model.json")
+    assert isinstance(report, FingerprintReport)
+    assert report.condition == slug
+    assert report.matched is True
+
+
+def test_fingerprint_renamed_and_stripped_copy_still_matches(tmp_path):
+    data = _load("breast-cancer")
+    del data["provenance"]
+    data["condition"] = "totally-different-name"
+    copy_path = tmp_path / "some" / "arbitrary" / "path" / "weights.json"
+    copy_path.parent.mkdir(parents=True)
+    copy_path.write_text(json.dumps(data))
+
+    report = fingerprint(copy_path)
+    assert report.condition == "breast-cancer"
+    assert report.matched is True
+
+
+def test_fingerprint_perturbed_leaves_no_match(tmp_path):
+    data = _load("breast-cancer")
+    # breast-cancer's isotonic calibrator saturates most canary rows to a
+    # boundary value (5/8 pin to 1.0), so a small nudge to every leaf can be
+    # invisible in p_cal even though p_raw moved (+1e-2 lands every row
+    # right back on 1.0, which by coincidence equals kidney-disease's fully
+    # saturated canary vector -- exactly the false-match risk this test
+    # exists to avoid). -5e-3 is large enough to move several canary rows
+    # off their saturation plateau without landing on any other condition's
+    # canary vector (checked against all six committed p_cal vectors).
+    for tree in data["trees"]:
+        for node in tree:
+            if node["f"] == _LEAF:
+                node["v"] = node["v"] - 5e-3
+    copy_path = tmp_path / "perturbed.json"
+    copy_path.write_text(json.dumps(data))
+
+    report = fingerprint(copy_path)
+    assert report.condition is None
+    assert report.matched is False
+
+
+# --------------------------------------------------------------------------
+# Guard tests: the private key must never be inside the repo, and .gitignore
+# must actually keep it (and private/) out.
+# --------------------------------------------------------------------------
+
+
+def test_gitignore_blocks_key_and_private_paths():
+    for target in (".claude/keys/x", "private/x"):
+        result = subprocess.run(
+            ["git", "check-ignore", target],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, f"{target} is not gitignored"
+
+
+def test_no_private_pem_or_private_dir_tracked_by_git():
+    result = subprocess.run(
+        ["git", "ls-files"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    tracked = result.stdout.splitlines()
+    pem_files = [f for f in tracked if f.endswith(".pem")]
+    assert pem_files == ["provenance/pubkey.pem"]
+    assert not any(f.startswith("private/") for f in tracked)
+    assert not any(f.startswith(".claude/") for f in tracked)
+
+
+def test_signing_key_not_under_repo_root():
+    import os
+
+    key_path = Path(
+        os.environ.get(
+            "NIGHTINGALE_SIGNING_KEY",
+            "/Users/safdarhussain/Desktop/Projects/GitHub/.claude/keys/nightingale_ed25519.pem",
+        )
+    ).resolve()
+    assert not str(key_path).startswith(str(REPO_ROOT.resolve()) + os.sep)

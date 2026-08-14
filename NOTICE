@@ -1,0 +1,19 @@
+Nightingale — calibrated clinical risk models
+Copyright (c) 2026 Safdar Hussain
+https://github.com/safdar-hussain1/nightingale
+
+This repository is signed. provenance/manifest.json lists a SHA-256 hash
+for every generated artifact (model bundles, cleaned datasets, report
+figures, dashboard) and carries an Ed25519 signature over that list, made
+with a private key kept outside this repository; the matching public key
+is provenance/pubkey.pem. Running nightingale.provenance.verify() against
+a checkout recomputes each hash from the files actually on disk and checks
+the signature, so a downloaded or altered copy can be told apart from the
+author's own.
+
+Every models/<slug>/model.json also carries a canaries block: deterministic
+inputs and the calibrated probability this project's own code gives them.
+nightingale.provenance.fingerprint() runs those inputs back through the
+file's own trees and compares the result against each of the six conditions
+this project publishes, which is enough to identify a copy of one of those
+models even if it has been renamed and had its provenance metadata removed.
