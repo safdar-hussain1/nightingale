@@ -244,7 +244,10 @@ def test_chartjs_is_pinned_with_subresource_integrity(html):
 
 def test_chartjs_is_the_only_remote_subresource(html):
     """Everything but Chart.js is inline, so the page works from ``file://``."""
-    remote = re.findall(r'(?:src|href)="(https?://[^"]+)"', html)
+    # rel="canonical" is crawler metadata, never fetched — drop it before the
+    # scan so only tags that actually pull bytes are held to the rule.
+    scannable = re.sub(r'<link rel="canonical"[^>]*>', "", html)
+    remote = re.findall(r'(?:src|href)="(https?://[^"]+)"', scannable)
     subresources = [url for url in remote if not url.startswith("https://github.com")]
     assert all("chart.js" in url for url in subresources), subresources
 
