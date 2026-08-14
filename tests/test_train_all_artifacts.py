@@ -329,3 +329,26 @@ def test_cervical_cancer_pr_auc_is_reported_with_a_genuinely_wide_ci():
     point, lo, hi = _load_metrics("cervical-cancer")["pr_auc"]
     assert lo <= point <= hi
     assert (hi - lo) > 0.05
+
+
+# ---------------------------------------------------------------------------
+# Pinned headline ROC-AUC point values. The three gates above bound
+# breast-cancer / diabetes / cervical-cancer against bars the brief set in
+# advance; these three pin the remaining conditions' published point estimate
+# to the exact value README.md and MODEL_CARD.md quote, so a silent drift in
+# training, cleaning, or the bootstrap seed turns the docs red instead of
+# leaving them quietly wrong. Values read from the committed metrics.json.
+# ---------------------------------------------------------------------------
+
+PINNED_ROC_AUC = {
+    "heart-disease": 0.8891653401784904,
+    "kidney-disease": 0.9979333333333333,
+    "liver-disease": 0.705147397512667,
+}
+
+
+@pytest.mark.parametrize("slug", sorted(PINNED_ROC_AUC))
+def test_headline_roc_auc_point_value_is_pinned(slug):
+    assert _load_metrics(slug)["roc_auc"][0] == pytest.approx(
+        PINNED_ROC_AUC[slug], abs=1e-9
+    )

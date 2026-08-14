@@ -1,130 +1,410 @@
-# Disease Prediction — Anatomy of a "Perfect" Classifier
+# Nightingale
 
-An imbalance-aware, **leakage-free** binary classification pipeline — and a forensic case study of how a data leak manufactured a validation ROC-AUC of **0.997 out of pure noise**.
+Calibrated screening-triage risk models for six clinical conditions, built so
+every published number arrives with its uncertainty attached — and so the
+model you read about is provably the model that runs.
 
-**▶ [Live case-file dashboard](https://safdar-hussain1.github.io/disease-prediction/)** — the full audit as interactive exhibits, including a live decision-threshold lab on real held-out predictions.
+**[Live dashboard](https://safdar-hussain1.github.io/nightingale/)** — all six
+models run entirely in the visitor's browser, from the same exported bundles
+this repository ships.
 
-![Leaky vs honest evaluation](reports/figures/leaky_vs_honest.png)
+![dashboard](reports/figures/dashboard.png)
 
-## The story
+> These are screening-triage risk models trained on small public research datasets. They are not diagnostic devices and must not be used for medical decisions. The diabetes labels are self-reported survey responses. The cervical-cancer cohort has 55 positive biopsies.
 
-This project began as second-year coursework: predict a binary `diagnosis` (~5% positive) from 10 anonymized patient features. The original notebook reported ROC-AUC ≈ 0.997 and looked like a triumph.
+## What it does
 
-Revisiting it with a correct evaluation protocol:
+Six conditions, one pipeline: fetch (SHA-256-pinned) → clean → nested-CV train
+with held-out calibration → bootstrap-interval evaluation → conformal
+prediction sets → browser export → signed manifest.
 
-| | Protocol | Validation ROC-AUC |
-|---|---|---|
-| ❌ Original | ADASYN oversampling **before** the split, transformer fit on test data | **0.99** — fabricated by leakage |
-| ✅ Rebuilt | Split first; SMOTE + scaling inside CV folds (`imblearn.Pipeline`) | **≈ 0.5** — chance level |
+| Condition | Source | Cohort | Positives | ROC-AUC [95% CI] |
+|---|---|---:|---:|---|
+| Breast cancer (WDBC) | UCI 17 | 569 | 212 | 0.9864 [0.9759, 0.9948] |
+| Cervical cancer (risk factors) | UCI 383 | 858 | 55 | 0.6703 [0.5942, 0.7452] |
+| Heart disease (four hospitals) | UCI 45 | 920 | 509 | 0.8892 [0.8663, 0.9101] |
+| Chronic kidney disease | UCI 336 | 400 | 250 | 0.9979 [0.9937, 1.0000] |
+| Liver disease (ILPD) | UCI 225 | 583 | 416 | 0.7051 [0.6626, 0.7451] |
+| Diabetes (CDC BRFSS 2015) | UCI 891 | 253,680 | 35,346 | 0.8288 [0.8268, 0.8309] |
 
-The dataset's features turn out to carry **no signal at all** (near-zero mutual information with the target; four tuned model families all score at chance). Oversampling before splitting had planted synthetic near-copies of validation patients inside the training set, letting a random forest "memorise" its way to a perfect score.
+Every figure is computed on out-of-fold predictions from a 5×3 nested
+cross-validation, with 2,000-replicate stratified bootstrap intervals. Full
+per-condition metrics — PR-AUC, Brier, ECE, conformal q̂, subgroup gaps — are
+in [`MODEL_CARD.md`](MODEL_CARD.md).
 
-To show the rebuilt pipeline is sound rather than merely pessimistic, the same code path applied to a real diagnostic dataset (Wisconsin breast cancer) reaches an honest, leakage-free **ROC-AUC ≈ 0.995** — and the test suite verifies every candidate pipeline recovers a planted signal under cross-validation.
+Two of those rows deserve to be read sceptically, and the model card says so at
+length. **Cervical cancer** discriminates modestly (0.67) on 55 positives out of
+858 — an honestly weak result, published as measured. **Chronic kidney disease**
+scores 0.998 because that 400-row benchmark is close to separable by
+construction: ten categorical clinical findings split the two classes perfectly,
+and missingness alone carries up to 0.72 AUC. Read it as "this published
+benchmark is easy", not as "a deployed screener would score 99.8%".
 
-Full narrative with figures: [`notebooks/disease_prediction_analysis.ipynb`](notebooks/disease_prediction_analysis.ipynb).
+## What makes it rigorous
 
-## What the pipeline does right
+- **Calibration first, and cross-fitted.** Every reported calibrated metric
+  comes from probabilities produced by a calibrator that never saw the row it
+  is scoring: for each outer fold, the isotonic calibrator is fit only on
+  out-of-fold rows from the *other* folds. An earlier in-sample version of this
+  produced ECE around 1e-19 — a number too good to be a result, and a bug
+  report instead. The deployment calibrator (fit on the whole pooled OOF frame)
+  is kept as the exported artifact, but no published metric is computed from it.
+- **Conformal "uncertain" sets.** Split-conformal prediction at α = 0.1 gives
+  each condition a q̂ and lets the model abstain rather than guess. Heart
+  disease returns "uncertain" on 19.46% of rows, liver disease on 47.17%,
+  diabetes on 7.61%. Kidney disease has q̂ = 0.0 and therefore **can never
+  return "uncertain"** — disclosed everywhere its verdicts appear.
+- **Bootstrap intervals everywhere.** No point estimate is published without
+  one; each metric draws from its own bootstrap seed stream, so the four
+  intervals are not artificially correlated.
+- **Decision-curve analysis.** Net benefit against treat-all and treat-none
+  across 99 thresholds, per condition, so "is this model worth using at the
+  threshold I care about" has an answer that AUC cannot give.
+- **Leakage sentinels with mutation tests.** A statistical detector flags
+  sentinel-coded zeros; the site-scoped cholesterol rule is verified by
+  deliberately breaking it and confirming the test goes red. Calibrator
+  hold-out is asserted live inside the transfer study, not trusted to
+  `train_test_split`.
+- **Missing-tolerant inference.** Blank fields are missing, never zero. The
+  browser walker maps `null`, `""`, whitespace and non-numeric strings to NaN —
+  measured on the real heart-disease bundle, treating blanks as `0` instead
+  moved a prediction from 0.8462 to 0.1350 and flipped the verdict.
+- **Signed provenance.** An Ed25519 signature over a SHA-256 manifest of all 34
+  generated artifacts, plus per-model canary fingerprints that identify a lone
+  `model.json` even if it has been renamed and stripped of its metadata.
 
-- **Fold-safe resampling** — SMOTE lives inside an `imblearn.Pipeline`, so it is re-fit on training folds only; validation folds are never resampled.
-- **Stratified everything** — the 80/20 validation split and the 5-fold CV both preserve the 19:1 class ratio.
-- **Imbalance-appropriate metrics** — model selection on ROC-AUC / PR-AUC, never accuracy (an always-negative model is 95% "accurate" here).
-- **Explicit threshold tuning** — the decision threshold is tuned on the held-out validation split, not assumed to be 0.5.
-- **Fail-fast data validation** — schema, missingness, and label checks before any training.
-- **Tested** — `pytest` suite covers validation logic, threshold tuning, and an end-to-end check that each candidate learns a planted signal without leaking.
+## The four-hospital transfer study
 
-## Results
+The heart-disease cohort is four hospitals in one file — Cleveland, Hungary,
+Switzerland, VA Long Beach — with prevalence from 36.1% to 93.5%. That makes it
+a real external-validation bench, so the study trains on **Cleveland only**
+(303 rows, the highest-quality site) and deploys that model, unmodified, at the
+three hospitals it never saw.
 
-### Course dataset (honest protocol)
+**Zero-effort deployment, whole site, no site-local data at all:**
 
-Grid-searched with stratified 5-fold CV on the 80% training split; scored on the untouched 20% validation split (800 patients, 39 positive):
+| Site | n | Prevalence | ROC-AUC [95% CI] | ECE [95% CI] | Calibration slope |
+|---|---:|---:|---|---|---:|
+| Hungary | 294 | 36.05% | 0.8709 [0.8277, 0.9116] | 0.1579 [0.1356, 0.1883] | 0.958 |
+| Switzerland | 123 | 93.50% | 0.7832 [0.6397, 0.9163] | 0.2065 [0.1698, 0.2471] | 0.962 |
+| VA Long Beach | 200 | 74.50% | 0.6900 [0.5980, 0.7744] | 0.0782 [0.0534, 0.1487] | **0.478** |
 
-| Model | CV ROC-AUC | Validation ROC-AUC | Validation PR-AUC |
-|---|---|---|---|
-| Logistic Regression (`C=0.01`, balanced) | 0.514 | 0.440 | 0.044 |
-| Random Forest (400 trees + SMOTE) | 0.541 | 0.401 | 0.039 |
-| Gradient Boosting (+ SMOTE) | 0.529 | 0.398 | 0.039 |
-| XGBoost (`scale_pos_weight=19`) | 0.513 | 0.419 | 0.043 |
-| *Random Forest, leaky protocol (reproduction)* | — | *0.990* | — |
+Discrimination partly transfers — no site's interval touches chance.
+Calibration does not transfer at all.
 
-Chance ROC-AUC is 0.5 and chance PR-AUC equals the 4.9% base rate — every honest model sits at chance. **Inference: the anonymized features contain no learnable signal**, so the fitted model's test predictions (`reports/test_predictions.csv`, per-patient probability + thresholded label) are provably no better than predicting the base rate — the file exists to demonstrate the inference path, not clinical value. The threshold tuner degenerates to flagging nearly everyone (recall 1.0, precision ≈ 0.05), which is exactly what maximising F1 on noise looks like.
+**Intercept-only recalibration**, fit on a seeded 30% site-local split and
+scored on the held-out 70%. Both columns below are computed on the *identical*
+evaluation rows, so the before/after comparison is like-for-like:
 
-### Wisconsin breast cancer (same pipeline, real signal)
+| Site | n (eval) | Fitted intercept | ECE naive → recalibrated | ROC-AUC (identical, by construction) |
+|---|---:|---:|---|---|
+| Hungary | 206 | −1.050 | 0.1585 [0.1330, 0.1980] → **0.0466 [0.0282, 0.1028]** | 0.8641 |
+| Switzerland | 87 | +2.151 | 0.2007 [0.1543, 0.2512] → **0.0305 [0.0102, 0.0809]** | 0.7500 |
+| VA Long Beach | 140 | +0.415 | 0.0697 [0.0491, 0.1432] → 0.0918 [0.0693, 0.1410] | 0.7439 |
 
-Held-out validation split, 114 tumours (42 malignant):
+The two AUC columns are equal to the bit — a monotone logit shift cannot move a
+rank statistic — and the test suite asserts that on the literal published JSON
+fields, not on a conveniently-paired nested one.
 
-| Metric | Value |
-|---|---|
-| ROC-AUC | **0.995** |
-| PR-AUC | 0.993 |
-| Precision / Recall / F1 @ 0.5 | 0.976 / 0.952 / 0.964 |
-| Confusion matrix | TN 71 · FP 1 · FN 2 · TP 40 |
+**The `chol = 0` sentinel.** Every one of Switzerland's 123 rows records serum
+cholesterol as exactly `0`, which is physiologically impossible; VA does the
+same on 49 of its 200. A model trained where cholesterol is genuine reads those
+zeros as extreme-low cholesterol and fails silently. The cleaner converts them
+to NaN, scoped to those two sites only, so Cleveland's real low readings
+survive — and the sentinel detector confirms the handover by flagging `chol` on
+raw Switzerland at a zero-fraction of 1.0000 and no longer flagging it after
+cleaning.
 
-## Using the trained model
-
-`python -m disease_prediction.train` writes `models/final_model.joblib` — a dict with the fitted pipeline and tuned threshold. Score any CSV with the same schema (`feature_1…feature_10`, `patient_id`):
-
-```python
-import joblib, pandas as pd
-
-# Load the bundle this repo's own train step produced (only unpickle files you trust).
-bundle = joblib.load("models/final_model.joblib")
-model, threshold = bundle["model"], bundle["threshold"]
-
-df = pd.read_csv("data/disease_test.csv")
-probs = model.predict_proba(df[[f"feature_{i}" for i in range(1, 11)]])[:, 1]
-labels = (probs >= threshold).astype(int)
-```
-
-Or simply `python -m disease_prediction.predict`, which validates the schema first and writes `reports/test_predictions.csv` with `patient_id, probability, prediction`.
-
-## Repository structure
-
-```
-├── data/
-│   ├── disease_train.csv        # 4,000 patients × 10 features + diagnosis (course dataset)
-│   └── disease_test.csv         # 1,000 unlabelled patients
-├── notebooks/
-│   └── disease_prediction_analysis.ipynb   # the full case study, executed
-├── src/disease_prediction/
-│   ├── config.py                # paths, constants
-│   ├── data.py                  # loading + fail-fast validation
-│   ├── pipeline.py              # candidate pipelines & hyperparameter grids
-│   ├── evaluate.py              # metrics + threshold tuning
-│   ├── train.py                 # model selection protocol (python -m disease_prediction.train)
-│   └── predict.py               # test-set scoring (python -m disease_prediction.predict)
-├── models/                      # final_model.joblib + metrics.json (generated)
-├── reports/                     # figures + test_predictions.csv (generated)
-└── tests/test_pipeline.py
-```
+**VA is the honest negative result.** Its naive calibration slope is 0.478, far
+from the 1.0 that Hungary (0.958) and Switzerland (0.962) sit near — VA's
+problem is not a prevalence shift but a risk gradient that is too steep for how
+its outcomes are actually distributed. Intercept-only recalibration can correct
+a shift, not a slope, so it does not help here: ECE goes 0.0697 → 0.0918, and
+Brier is flat (0.158 → 0.162). The intervals overlap heavily at n = 140, so the
+honest statement is "recalibration did not demonstrably help VA", not
+"recalibration hurt VA". It is published as measured either way.
 
 ## Quickstart
 
 Requires Python 3.10+.
 
 ```bash
-git clone <this-repo>
-cd disease-prediction
+git clone https://github.com/safdar-hussain1/nightingale.git
+cd nightingale
 
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
-pytest                                  # sanity checks (~40s)
-python -m disease_prediction.train     # grid-search 4 model families, save model + metrics
-python -m disease_prediction.predict   # score the test set -> reports/test_predictions.csv
-jupyter lab notebooks/disease_prediction_analysis.ipynb
+pip install -r requirements.txt  # pinned versions that reproduce the numbers
+pip install -e ".[dev]"          # then the package itself, plus pytest
+
+pytest -q
 ```
 
-## Lessons learned
+The trained models, cleaned datasets and metrics are all committed, so nothing
+below needs a training run to work.
 
-1. **Resample after you split, never before** — and make the mistake structurally impossible by putting the resampler inside the pipeline.
-2. **A too-good number is a bug report.** 0.997 AUC from 10 anonymous features should trigger an audit, not a celebration.
-3. **Never fit any transformer on test data.**
-4. **Negative results are results** — proving the dataset unlearnable, and explaining precisely how the fake score arose, is the real deliverable.
+```bash
+nightingale evaluate --condition heart-disease
+```
+
+```
+heart-disease: n=920 prevalence=0.5533  roc_auc=0.8892 [0.8663, 0.9101]  pr_auc=0.8892 [0.8616, 0.9167]  brier=0.1280 [0.1145, 0.1425]  ece=0.0236 [0.0202, 0.0536]
+```
+
+Score one row. Unset features are missing (NaN), never zero:
+
+```bash
+nightingale predict --condition heart-disease \
+  --set age=58 --set sex=1 --set cp=4 --set thalach=140 --set oldpeak=1.5
+```
+
+```
+condition: heart-disease
+p_raw: 0.871399
+p_cal: 0.846154
+verdict: positive
+provenance: commit=d2d599ef84f9f2b77a544310675ed8df575e2173 built_utc=2026-08-13T17:40:30Z author=Safdar Hussain
+```
+
+Going back to raw data is two commands. `fetch` verifies a pinned SHA-256 for
+every file it lands and touches the network only when the cache is empty;
+`clean` writes a byte-deterministic gzip, so a re-run leaves the signed
+artifact unchanged:
+
+```bash
+nightingale fetch --condition heart-disease
+nightingale clean --condition heart-disease
+```
+
+```
+heart-disease: fetched -> /path/to/nightingale/data/raw/heart-disease
+heart-disease: cleaned -> /path/to/nightingale/data/cleaned/heart-disease.csv.gz
+```
+
+Retraining one condition (the full six-condition run takes 365.0s end to end;
+heart disease alone is the 18–20s below):
+
+```bash
+nightingale train --condition heart-disease
+```
+
+```
+=== heart-disease (Heart disease (four-hospital cohort)) ===
+  n=920 prevalence=0.5533 roc_auc=0.8892 [0.8663, 0.9101]  pr_auc=0.8892 [0.8616, 0.9167]  brier=0.1280 [0.1145, 0.1425]  ece=0.0236 [0.0202, 0.0536]  q_hat=0.6842 uncertain_rate=0.1946  wall=19.8s
+  wrote models/heart-disease/metrics.json
+  wrote models/heart-disease/oof_predictions.csv.gz
+  wrote reports/figures/heart-disease-reliability.png
+  wrote reports/figures/heart-disease-decision-curve.png
+
+Total wall-clock (this invocation): 19.8s across 1 conditions
+```
+
+Wall-clock is the only thing that moves between runs — the metrics and the
+written artifacts are byte-identical, because training is a deterministic
+function of `seed=42` and the gzip container pins `mtime=0`.
+
+The remaining subcommands: `nightingale external` runs the four-hospital
+transfer study, `nightingale export` regenerates the browser bundles,
+`nightingale sign` re-signs the manifest with a private key kept outside the
+repository, and `nightingale verify` checks it. `nightingale <subcommand>
+--help` prints every flag. There is deliberately no top-level `--condition`:
+argparse lets a subparser's flag silently shadow a same-named top-level one, so
+the flag is defined in exactly one place.
+
+## The browser runs the real model
+
+The dashboard does not call an API and does not load an ML runtime. Each
+condition's gradient-boosted trees are exported to a plain JSON bundle, and
+a single 268-line JavaScript file (`docs/assets/walker.js`) walks them directly.
+
+**Parity gate: 1e-9, measured worst case 7.22e-16.** Across 1,200 cases (200
+per condition, half drawn from real cleaned rows, a quarter with 1–4 blanked
+fields), the largest disagreement between the Python reference walker and
+`node docs/assets/walker.js` on the calibrated probability is 7.22e-16 — six
+orders of magnitude inside the gate. All 1,200 conformal verdict strings agree
+exactly. Getting there required two fixes that would otherwise have shipped
+plausible-looking wrong probabilities: split comparisons must happen in
+**float32** (both the input and the stored threshold), and XGBoost's JSON dump
+omits the split condition entirely on indicator-typed features, which affected
+51 of kidney disease's nodes.
+
+**Self-test hook.** Open the dashboard with `?selftest=1` and the page re-scores
+all six models' stored canary inputs through its own inlined walker, comparing
+against the committed probabilities at 1e-12 and putting the result in the page
+title:
+
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless \
+  --virtual-time-budget=8000 --dump-dom "file://$PWD/docs/index.html?selftest=1" \
+  | grep -o "<title>[^<]*"
+# -> NIGHTINGALE SELFTEST PASS max=0.000e+0
+```
+
+Exactly zero, across 6 conditions × 8 canaries.
+
+**Accuracy per KB.** The budget was 300 KB gzipped per bundle. Nothing came
+close, so no model was traded down for size:
+
+| Condition | Trees | Nodes | Raw | `gzip -9` | % of budget |
+|---|---:|---:|---:|---:|---:|
+| breast-cancer | 300 | 1,678 | 112,239 B | 17,896 B | 5.8% |
+| cervical-cancer | 100 | 1,600 | 96,935 B | 15,330 B | 5.0% |
+| diabetes | 300 | 2,100 | 130,921 B | 21,459 B | 7.0% |
+| heart-disease | 100 | 700 | 44,257 B | 7,903 B | 2.6% |
+| kidney-disease | 100 | 638 | 43,267 B | 7,220 B | 2.3% |
+| liver-disease | 100 | 620 | 38,911 B | 6,720 B | 2.2% |
+
+All six together are 76,528 B gzipped. The whole dashboard, models inlined, is
+718,166 B (143,052 B gzipped) in a single self-contained file.
+
+## Provenance — it's signed
+
+```bash
+nightingale verify
+```
+
+```
+OK: data/cleaned/breast-cancer.csv.gz
+OK: data/cleaned/cervical-cancer.csv.gz
+...
+OK: reports/figures/liver-disease-decision-curve.png
+signature: valid
+OK
+```
+
+34 artifacts, each hash recomputed from the file actually on disk, then an
+Ed25519 signature checked over the manifest. Exit code 0 on success, non-zero
+on any mismatch. The public key is `provenance/pubkey.pem`; its fingerprint —
+the SHA-256 of the raw 32-byte key — is
+
+```
+49e4e52d6015eb7398cc04b0fd8fcb8fc5a82cd3a501836af55bb15518bd17a8
+```
+
+and it is printed in the dashboard footer beside the `openssl` pipe that
+recomputes it. Compare it out-of-band before trusting a checkout: a copy
+re-signed by someone else, with their key committed in place of this one, will
+verify happily against itself.
+
+Signature aside, every `models/<slug>/model.json` carries a canary block —
+deterministic inputs plus the probability this project's own code gives them.
+Given a lone bundle found anywhere, `verify --fingerprint` says which of the six
+conditions it is a copy of, even renamed and stripped of its metadata:
+
+```bash
+nightingale verify --fingerprint models/kidney-disease/model.json
+```
+
+```
+models/kidney-disease/model.json: matches kidney-disease
+```
+
+It does that by running each *registered* condition's own canary inputs through
+both the reference trees and the candidate's trees and comparing the
+pre-calibration outputs — never trusting anything the candidate file says about
+itself, and never letting the candidate choose the inputs. An earlier design
+that did both was forgeable: saturated isotonic calibrators let a tampered tree
+drift while every calibrated canary stayed put, and a hand-picked input set
+could make one condition's bundle authenticate as another's.
+
+The chain proves three things and no more: that the artifacts on disk are the
+bytes the key holder signed, that a given bundle is a copy of a specific
+published condition, and that the models were exported at a named commit. It
+proves nothing about the clinical validity of any prediction. See
+[`NOTICE`](NOTICE) for the full statement of what the signature does and does
+not cover.
+
+## Repository structure
+
+```
+src/nightingale/
+  conditions.py   # the six-condition registry: sources, citations, expected shapes
+  fetch.py        # SHA-256-pinned downloads into data/raw/<slug>/
+  clean.py        # per-condition cleaners -> data/cleaned/<slug>.csv.gz
+  sentinel.py     # sentinel-zero detector + calibrator hold-out assertions
+  model.py        # nested CV, inner grid search, cross-fitted calibration
+  calibrate.py    # isotonic / sigmoid calibrators with a JSON export contract
+  evaluate.py     # bootstrap-interval metrics, decision curves, subgroup audits
+  conformal.py    # split-conformal q-hat and prediction sets
+  external.py     # the four-hospital transfer study + intercept recalibration
+  export.py       # browser bundle writer and the Python reference walker
+  provenance.py   # manifest, Ed25519 signing, verification, fingerprinting
+  cli.py          # the `nightingale` command: nine subcommands, thin wrappers
+scripts/
+  train_all.py            # the published six-condition run
+  external_study.py       # the published transfer study
+  build_dashboard.py      # bakes models + data into a single-file dashboard
+  dashboard_template.html
+data/
+  cleaned/*.csv.gz        # six cleaned datasets (committed, signed)
+  DATA_DICTIONARY.md      # every feature: type, unit, range, missingness
+  raw/                    # populated by `nightingale fetch` (gitignored)
+models/
+  <slug>/metrics.json         # published metrics with intervals, DCA, subgroups
+  <slug>/model.json           # browser bundle: trees, calibrator, q-hat, canaries
+  <slug>/oof_predictions.csv.gz
+  heart-disease/external.json # the four-hospital study's full output
+  run_meta.json               # wall-clock and run settings (deliberately unsigned)
+docs/
+  index.html      # the dashboard, served by GitHub Pages
+  assets/walker.js
+provenance/
+  manifest.json   # SHA-256 per artifact + the Ed25519 signature
+  pubkey.pem
+notebooks/
+  01_six_conditions.ipynb       # fetch -> clean -> train, per-condition results
+  02_external_validation.ipynb  # the four-hospital story
+reports/figures/  # reliability curves, decision curves, dashboard screenshot
+tests/            # the suite, one file per module
+MODEL_CARD.md, NOTICE, LICENSE, pyproject.toml, requirements.txt
+```
+
+## Data sources and licences
+
+All six datasets are public research datasets, redistributed here in cleaned
+form so every published number can be reproduced. None of them is mine.
+
+| Condition | Dataset | Licence | Citation |
+|---|---|---|---|
+| breast-cancer | UCI 17, Breast Cancer Wisconsin (Diagnostic) | CC BY 4.0 | Wolberg, W., Street, W., & Mangasarian, O. (1995). *Breast Cancer Wisconsin (Diagnostic)* [Dataset]. UCI Machine Learning Repository. https://archive.ics.uci.edu/dataset/17 |
+| cervical-cancer | UCI 383, Cervical Cancer (Risk Factors) | CC BY 4.0 | Fernandes, K., Cardoso, J., & Fernandes, J. (2017). *Cervical Cancer (Risk Factors)* [Dataset]. UCI Machine Learning Repository. https://archive.ics.uci.edu/dataset/383 |
+| heart-disease | UCI 45, Heart Disease (four processed site files) | CC BY 4.0 | Detrano, R., Janosi, A., Steinbrunn, W., Pfisterer, M., Schmid, J., Sandhu, S., Guppy, K., Lee, S., & Froelicher, V. (1988). *Heart Disease* [Dataset]. UCI Machine Learning Repository. https://archive.ics.uci.edu/dataset/45 |
+| kidney-disease | UCI 336, Chronic Kidney Disease | CC BY 4.0 | Rubini, L., Soundarapandian, P., & Eswaran, P. (2015). *Chronic Kidney Disease* [Dataset]. UCI Machine Learning Repository. https://archive.ics.uci.edu/dataset/336 |
+| liver-disease | UCI 225, ILPD (Indian Liver Patient Dataset) | CC BY 4.0 | Ramana, B. & Venkateswarlu, N. (2012). *ILPD (Indian Liver Patient Dataset)* [Dataset]. UCI Machine Learning Repository. https://archive.ics.uci.edu/dataset/225 |
+| diabetes | UCI 891, CDC Diabetes Health Indicators | Public domain (US federal work, CDC BRFSS 2015) | *CDC Diabetes Health Indicators* [Dataset] (2015). Derived from the CDC Behavioral Risk Factor Surveillance System (BRFSS) 2015 survey. UCI Machine Learning Repository. https://archive.ics.uci.edu/dataset/891 |
+
+Column-level detail — type, unit, range, missingness, target definition, and
+every cleaning decision — is in
+[`data/DATA_DICTIONARY.md`](data/DATA_DICTIONARY.md).
 
 ## Tech stack
 
-Python · scikit-learn · imbalanced-learn · XGBoost · pandas · Matplotlib · pytest
+Python, pandas, NumPy, scikit-learn, XGBoost, Matplotlib, `cryptography` for
+Ed25519, Jupyter for the notebooks. The dashboard is one
+self-contained HTML file: no framework, no build step, no ML runtime — plain
+JavaScript walking the exported trees, with Chart.js (pinned by SRI hash) used
+only for two cartesian plots and a hand-written SVG renderer standing in when it
+cannot be reached.
+
+Every number in this README, the model card and the data dictionary was
+produced with:
+
+| Library | Version |
+|---|---|
+| Python | 3.12.13 |
+| pandas | 3.0.3 |
+| NumPy | 2.5.1 |
+| scikit-learn | 1.9.0 |
+| XGBoost | 3.3.0 |
+| Matplotlib | 3.11.0 |
+| cryptography | 50.0.0 |
+| Node (parity check) | 23.7.0 |
+
+Install `requirements.txt` *before* `pip install -e .` so pip resolves those
+pinned versions rather than the looser floors in `pyproject.toml`.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) — code only. The datasets keep their own licences; see the table
+above.
