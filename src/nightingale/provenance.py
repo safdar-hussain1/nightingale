@@ -21,16 +21,34 @@ bytes it was signed against, not a recipe for reproducing them.
 **"Is this lone ``model.json`` -- found anywhere, renamed, with its
 ``provenance`` block deleted -- one of this project's six trees?"** --
 :func:`fingerprint` answers that without needing the file's own metadata at
-all. Every ``model.json`` carries a ``canaries`` block: eight deterministic
-inputs and the ``p_cal`` this project's own walker gives them (see
-:func:`nightingale.export.build_canaries`). Recomputing those eight numbers
-from the FILE'S OWN trees on the FILE'S OWN inputs reproduces, bit for bit,
-whichever condition's trees it actually contains -- stripping the
-``provenance`` block or renaming the ``condition`` field changes nothing the
-walker reads. Comparing that recomputed vector against the ``p_cal`` this
-project published for each of the six registered conditions is therefore a
-fingerprint: a match names the source condition, and a single altered leaf
-anywhere breaks the match.
+all, and WITHOUT trusting anything the candidate file supplies about which
+inputs to test it on.
+
+An earlier version of this function ran the CANDIDATE's own
+``canaries.inputs`` through the candidate's own trees and compared the
+result to each registered condition's STORED ``canaries.p_cal``. That is
+forgeable two different ways: (1) many canary rows land on a calibrator's
+saturated plateau (``p_cal`` pinned to 0 or 1), so a tampered tree can drift
+substantially in ``p_raw`` while every affected ``p_cal`` stays put --
+measured at up to 100% false-authentic acceptance of tampered leaves on
+5 of 6 conditions; (2) because the candidate supplies its OWN inputs, an
+attacker can pick 8 copies of one input the target's calibrator saturates
+and forge a match against ANY registered condition, including ones with a
+completely different tree structure.
+
+The fix removes both trust anchors. For each registered condition, this
+module loads THAT CONDITION'S OWN COMMITTED ``model.json`` -- never the
+candidate's -- and takes its ``canaries.inputs`` from there. Those
+reference-pinned inputs are run through both the reference's own trees and
+the CANDIDATE's trees, and the two ``p_raw`` (pre-calibration) vectors are
+compared: ``p_raw`` is a continuous sigmoid, not a step function, so it
+carries a genuine tree-identity signal that a saturated ``p_cal`` erases.
+A condition "matches" only if it is the SOLE registered condition whose
+reference inputs produce agreement within :data:`FINGERPRINT_TOLERANCE`;
+zero or more-than-one agreeing conditions is reported as no match rather
+than picking the last one seen. The candidate never gets to choose what it
+is tested on, and the comparison happens in the space where tampering is
+actually visible.
 
 The private signing key never lives in this repository. It is generated
 once, kept at a path outside the checkout (default
@@ -43,6 +61,7 @@ committed.
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import json
 import os
@@ -79,12 +98,16 @@ ARTIFACT_GLOBS: tuple[str, ...] = (
     "docs/index.html",
 )
 
-DEFAULT_MANIFEST_PATH = REPO_ROOT / "provenance" / "manifest.json"
-DEFAULT_PUBKEY_PATH = REPO_ROOT / "provenance" / "pubkey.pem"
+# Relative to the repo root; the single source of truth for where the
+# signed manifest and public key live, so the default in every function
+# that needs one is computed from here instead of a repeated literal.
+MANIFEST_RELPATH = Path("provenance/manifest.json")
+PUBKEY_RELPATH = Path("provenance/pubkey.pem")
+DEFAULT_MANIFEST_PATH = REPO_ROOT / MANIFEST_RELPATH
+DEFAULT_PUBKEY_PATH = REPO_ROOT / PUBKEY_RELPATH
 
-# The maximum abs difference between a recomputed canary p_cal and a
-# registered condition's published p_cal that still counts as a match. Two
-# walkers built to match each other (this module reuses
+# The maximum abs difference between two p_raw vectors that still counts as
+# a match. Two walkers built to match each other (this module reuses
 # nightingale.export.predict directly, so it is really the SAME walker) hold
 # to float64 rounding, which is far tighter than this -- 1e-12 is the bar
 # the brief sets, not a measured slack.
@@ -125,7 +148,39 @@ def discover_artifacts(repo_root: Path) -> list[Path]:
 
 
 def _sha256_file(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    """SHA-256 hex digest of ``path``, read in fixed-size chunks.
+
+    Chunked rather than ``path.read_bytes()`` so hashing a large artifact
+    (a cleaned dataset, a figure) never pulls the whole file into memory at
+    once. Any I/O failure -- the file disappearing between an existence
+    check and this call, permission trouble -- surfaces as ``OSError`` (its
+    usual subclasses, e.g. ``FileNotFoundError``), which callers are
+    expected to catch rather than let propagate as a crash.
+    """
+    hasher = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def _resolve_artifact_path(repo_root: Path, relpath: str) -> Path | None:
+    """``repo_root / relpath`` if that stays under ``repo_root``, else ``None``.
+
+    Rejects an absolute ``relpath`` outright, and rejects any ``relpath``
+    (e.g. ``"../../etc/passwd"``) whose resolved location escapes
+    ``repo_root`` -- a manifest is a list of relative paths INTO the
+    checkout, never an instruction to read anything else on disk.
+    """
+    candidate = Path(relpath)
+    if candidate.is_absolute():
+        return None
+    resolved = (repo_root / candidate).resolve()
+    try:
+        resolved.relative_to(repo_root.resolve())
+    except ValueError:
+        return None
+    return resolved
 
 
 def build_manifest(paths: list[Path], repo_root: Path = REPO_ROOT) -> dict:
@@ -205,7 +260,8 @@ def sign_manifest(
 class VerifyReport:
     """Result of :func:`verify`: per-artifact status plus the signature check."""
 
-    artifacts: dict[str, str]  # relpath -> "OK" | "TAMPERED" | "MISSING"
+    # relpath -> "OK" | "TAMPERED" | "MISSING" | "INVALID_PATH" | "UNVERIFIED"
+    artifacts: dict[str, str]
     signature_valid: bool
 
     @property
@@ -214,40 +270,78 @@ class VerifyReport:
         return self.signature_valid and all(status == "OK" for status in self.artifacts.values())
 
 
+def _check_signature(manifest: dict, pubkey_path: str | Path) -> bool:
+    """Verify ``manifest``'s ``signature_b64`` over its own ``artifacts``/``meta``.
+
+    Fails closed: a missing ``signature_b64``/``artifacts``/``meta`` key
+    (``KeyError``), non-base64 garbage in ``signature_b64``
+    (``binascii.Error``, which ``base64.b64decode`` raises with
+    ``validate=True``), or any other malformed input is treated the same as
+    a cryptographically invalid signature -- ``False``, never a raised
+    exception.
+    """
+    public_key = _load_public_key(pubkey_path)
+    try:
+        payload = canonical_json_bytes({"artifacts": manifest["artifacts"], "meta": manifest["meta"]})
+        signature = base64.b64decode(manifest["signature_b64"], validate=True)
+        public_key.verify(signature, payload)
+        return True
+    except (InvalidSignature, binascii.Error, KeyError, ValueError, TypeError):
+        return False
+
+
 def verify(
     repo_root: Path,
     pubkey_path: str | Path,
     manifest_path: Path | None = None,
 ) -> VerifyReport:
-    """Recompute hashes of every artifact the manifest lists, and check the signature.
+    """Check the signature, THEN recompute hashes of every artifact the manifest lists.
+
+    The signature is checked FIRST and hashing never happens if it fails --
+    an attacker who edits the manifest (adding artifact entries, changing
+    hashes, pointing a path outside the checkout) invalidates the signature
+    over ``{"artifacts", "meta"}``, and this function refuses to touch the
+    filesystem on their behalf when that happens. Every listed relpath is
+    additionally checked to resolve to somewhere under ``repo_root`` before
+    being hashed -- a defence-in-depth measure independent of the signature
+    check, since a manifest is a list of relative paths INTO the checkout,
+    never an instruction to read arbitrary locations.
 
     Hashes are always taken from the files ON DISK -- never regenerated --
     per the Task 10 coordination note: a fresh export after any later commit
     would legitimately produce different bytes and must not read as
     tampering.
     """
-    repo_root = Path(repo_root)
-    manifest_path = Path(manifest_path) if manifest_path else repo_root / "provenance" / "manifest.json"
+    repo_root = Path(repo_root).resolve()
+    manifest_path = Path(manifest_path) if manifest_path else repo_root / MANIFEST_RELPATH
     manifest = json.loads(manifest_path.read_text())
+    artifact_hashes: dict[str, str] = manifest.get("artifacts", {}) or {}
+
+    signature_valid = _check_signature(manifest, pubkey_path)
+    if not signature_valid:
+        # Refuse to hash anything an unverified manifest points at.
+        return VerifyReport(
+            artifacts={relpath: "UNVERIFIED" for relpath in artifact_hashes},
+            signature_valid=False,
+        )
 
     statuses: dict[str, str] = {}
-    for relpath, expected_hash in manifest["artifacts"].items():
-        path = repo_root / relpath
-        if not path.is_file():
-            statuses[relpath] = "MISSING"
+    for relpath, expected_hash in artifact_hashes.items():
+        resolved = _resolve_artifact_path(repo_root, relpath)
+        if resolved is None:
+            statuses[relpath] = "INVALID_PATH"
             continue
-        statuses[relpath] = "OK" if _sha256_file(path) == expected_hash else "TAMPERED"
+        try:
+            if not resolved.is_file():
+                statuses[relpath] = "MISSING"
+                continue
+            statuses[relpath] = "OK" if _sha256_file(resolved) == expected_hash else "TAMPERED"
+        except OSError:
+            # e.g. the file vanished between the is_file() check and the
+            # read (a TOCTOU race), or a permission error mid-read.
+            statuses[relpath] = "MISSING"
 
-    payload = canonical_json_bytes({"artifacts": manifest["artifacts"], "meta": manifest["meta"]})
-
-    public_key = _load_public_key(pubkey_path)
-    try:
-        public_key.verify(base64.b64decode(manifest["signature_b64"]), payload)
-        signature_valid = True
-    except InvalidSignature:
-        signature_valid = False
-
-    return VerifyReport(artifacts=statuses, signature_valid=signature_valid)
+    return VerifyReport(artifacts=statuses, signature_valid=True)
 
 
 # --------------------------------------------------------------------------
@@ -257,10 +351,16 @@ def verify(
 
 @dataclass
 class FingerprintReport:
-    """Result of :func:`fingerprint`: the matched condition, if any, and the evidence."""
+    """Result of :func:`fingerprint`: the matched condition, if any, and the evidence.
 
-    computed_p_cal: list[float]
+    ``condition`` is set only when exactly one registered condition agrees
+    within :data:`FINGERPRINT_TOLERANCE` -- zero agreeing conditions and
+    more than one agreeing condition both report ``None`` (see ``matches``
+    for which, and how many, actually agreed).
+    """
+
     condition: str | None
+    matches: list[str] = field(default_factory=list)
     max_abs_diff: dict[str, float] = field(default_factory=dict)
 
     @property
@@ -271,35 +371,53 @@ class FingerprintReport:
 def fingerprint(model_json_path: str | Path) -> FingerprintReport:
     """Identify which registered condition's trees a ``model.json`` file contains.
 
-    Runs the file's OWN ``canaries.inputs`` through the exporter's reference
-    walker (:func:`nightingale.export.predict`) using the file's OWN trees --
-    ignoring whatever the file's ``condition``/``provenance`` fields claim --
-    then compares the resulting ``p_cal`` vector against the ``p_cal``
-    published in each of the six registered conditions' COMMITTED
-    ``models/<slug>/model.json``. A copy of a condition's file, renamed and
-    with ``provenance`` stripped, still carries that condition's trees and
-    canary inputs unchanged, so the recomputed vector reproduces the
-    original published one exactly; any altered leaf value breaks every
-    match.
+    For each of the six registered conditions, this loads THAT CONDITION'S
+    OWN COMMITTED ``models/<slug>/model.json`` and takes its
+    ``canaries.inputs`` -- never the candidate's -- then runs those
+    reference-pinned inputs through both the reference's trees and the
+    candidate's trees, comparing the two ``p_raw`` (pre-calibration)
+    vectors. A condition counts as agreeing iff every row's ``p_raw`` is
+    within :data:`FINGERPRINT_TOLERANCE`; ``condition`` is set only if
+    EXACTLY ONE registered condition agrees.
+
+    Using ``p_raw`` rather than ``p_cal`` matters: an isotonic calibrator
+    can saturate several canary rows to the same boundary value, hiding a
+    tampered tree's margin shift behind an unchanged calibrated output.
+    Pinning the inputs to the REFERENCE rather than letting the candidate
+    supply its own matters too: a candidate that chooses its own inputs can
+    pick ones a target condition's calibrator saturates and forge a match
+    against a condition with entirely different trees. Neither hazard is
+    reachable here -- the candidate never gets to choose what it is tested
+    on, in either sense.
+
+    A candidate whose own trees expect a different number of features than
+    a given reference (almost always the case for a NON-matching condition)
+    simply fails to agree with that reference; :func:`nightingale.export.
+    predict` raising on the row-length mismatch is caught and recorded as
+    non-agreement, not propagated.
     """
     data = json.loads(Path(model_json_path).read_text())
-    canaries = data["canaries"]
-    computed = [predict(data, row)["p_cal"] for row in canaries["inputs"]]
 
     diffs: dict[str, float] = {}
-    matched: str | None = None
+    matches: list[str] = []
     for slug in sorted(CONDITIONS):
         reference_path = REPO_ROOT / "models" / slug / "model.json"
         if not reference_path.is_file():
             continue  # pragma: no cover - all six are committed in this repo
         reference = json.loads(reference_path.read_text())
-        reference_p_cal = reference["canaries"]["p_cal"]
-        if len(reference_p_cal) != len(computed):
+        reference_inputs = reference["canaries"]["inputs"]
+        reference_p_raw = [predict(reference, row)["p_raw"] for row in reference_inputs]
+        try:
+            candidate_p_raw = [predict(data, row)["p_raw"] for row in reference_inputs]
+        except (ValueError, KeyError, IndexError, TypeError):
+            # Structurally can't be this condition (wrong feature count, or
+            # not even a well-formed model dict) -- not a match, not a crash.
             diffs[slug] = float("inf")
             continue
-        max_diff = max(abs(a - b) for a, b in zip(computed, reference_p_cal))
+        max_diff = max(abs(a - b) for a, b in zip(candidate_p_raw, reference_p_raw))
         diffs[slug] = max_diff
         if max_diff <= FINGERPRINT_TOLERANCE:
-            matched = slug
+            matches.append(slug)
 
-    return FingerprintReport(computed_p_cal=computed, condition=matched, max_abs_diff=diffs)
+    condition = matches[0] if len(matches) == 1 else None
+    return FingerprintReport(condition=condition, matches=matches, max_abs_diff=diffs)

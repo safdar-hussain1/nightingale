@@ -11,9 +11,21 @@ a checkout recomputes each hash from the files actually on disk and checks
 the signature, so a downloaded or altered copy can be told apart from the
 author's own.
 
+provenance/pubkey.pem ships inside this repository, so it is only trustworthy
+if you got it from somewhere you already trust — a checkout re-signed by
+someone else, with their own key committed in its place, will verify
+against itself just fine. To check that the key actually in front of you is
+the author's, compare it out-of-band (e.g. against the GitHub repository
+page, or this NOTICE as published by the author) against its fingerprint,
+the SHA-256 of the raw 32-byte Ed25519 public key:
+
+  49e4e52d6015eb7398cc04b0fd8fcb8fc5a82cd3a501836af55bb15518bd17a8
+
 Every models/<slug>/model.json also carries a canaries block: deterministic
-inputs and the calibrated probability this project's own code gives them.
-nightingale.provenance.fingerprint() runs those inputs back through the
-file's own trees and compares the result against each of the six conditions
-this project publishes, which is enough to identify a copy of one of those
-models even if it has been renamed and had its provenance metadata removed.
+inputs and the probability this project's own code gives them. Given a lone
+model.json found elsewhere, nightingale.provenance.fingerprint() identifies
+which of the six published conditions it is a copy of — even renamed, with
+its provenance metadata removed — by running each condition's own reference
+canary inputs through both the reference's trees and the candidate's trees
+and comparing the pre-calibration outputs, rather than trusting anything
+the candidate file supplies about itself.

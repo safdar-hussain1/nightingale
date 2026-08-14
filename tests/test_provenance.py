@@ -13,22 +13,31 @@ Two separate claims, two separate mechanisms:
    commits.
 2. **The fingerprint** proves a lone ``model.json`` -- found anywhere, under
    any name, with its ``provenance`` block stripped -- is a copy of one of
-   this project's six trees. It works because the canary inputs and the
-   trees travel together: recomputing ``p_cal`` from the file's own trees
-   on its own canary inputs reproduces the exact vector this project
-   published for the matching condition, and reproduces nothing for any
-   other condition or for a tree that has been altered at all.
+   this project's six trees. For each registered condition it runs THAT
+   CONDITION'S OWN committed canary inputs (never the candidate's) through
+   both the reference's trees and the candidate's trees, and compares the
+   two ``p_raw`` vectors. Pinning the inputs to the reference closes the
+   forgery an earlier, candidate-inputs design allowed (pick 8 copies of
+   one saturating input and forge a match against anything); comparing
+   ``p_raw`` rather than ``p_cal`` closes the other one (an isotonic
+   calibrator's saturated plateau hides a tampered tree's margin shift).
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 from pathlib import Path
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    PublicFormat,
+    load_pem_private_key,
+)
 
 from nightingale.export import REPO_ROOT, _LEAF
 from nightingale.provenance import (
@@ -41,6 +50,10 @@ from nightingale.provenance import (
     fingerprint,
     sign_manifest,
     verify,
+)
+
+SIGNING_KEY_PATH = Path(
+    "/Users/safdarhussain/Desktop/Projects/GitHub/.claude/keys/nightingale_ed25519.pem"
 )
 
 CONDITIONS_SLUGS = [
@@ -192,9 +205,10 @@ def test_verify_with_different_key_signature_invalid(tmp_path):
     report = verify(root, pub_b, manifest_path=out_path)
     assert report.signature_valid is False
     assert report.ok is False
-    # Artifacts on disk are untouched, so they still hash OK -- only the
-    # signature check fails.
-    assert set(report.artifacts.values()) == {"OK"}
+    # verify() checks the signature FIRST and refuses to hash anything once
+    # it fails -- artifacts are untouched on disk, but that is not reported
+    # as "OK", since nothing was actually checked against them.
+    assert set(report.artifacts.values()) == {"UNVERIFIED"}
 
 
 def test_sign_manifest_reads_key_path_from_env(tmp_path, monkeypatch):
@@ -206,6 +220,138 @@ def test_sign_manifest_reads_key_path_from_env(tmp_path, monkeypatch):
     out_path = sign_manifest(manifest, out_path=root / "provenance" / "manifest.json")
     report = verify(root, pub, manifest_path=out_path)
     assert report.signature_valid is True
+
+
+# --------------------------------------------------------------------------
+# I1: path handling -- signature checked before any hashing, and every
+# relpath must resolve under repo_root even when the signature is valid.
+# --------------------------------------------------------------------------
+
+
+def test_verify_rejects_traversal_and_absolute_paths_without_reading_them(tmp_path):
+    root = _tiny_repo(tmp_path)
+    priv, pub = _write_keypair(tmp_path)
+
+    outside = tmp_path / "secret.txt"
+    outside.write_text("outside the checkout")
+
+    manifest = build_manifest(discover_artifacts(root), root)
+    # Genuinely, validly signed manifest that ALSO lists a path outside the
+    # repo two different ways -- this is what a signature check alone
+    # cannot catch, since the signature is only over whatever content the
+    # manifest actually has.
+    manifest["artifacts"]["../secret.txt"] = hashlib.sha256(outside.read_bytes()).hexdigest()
+    manifest["artifacts"][str(outside)] = hashlib.sha256(outside.read_bytes()).hexdigest()
+    out_path = sign_manifest(manifest, key_path=priv, out_path=root / "provenance" / "manifest.json")
+
+    report = verify(root, pub, manifest_path=out_path)
+    assert report.signature_valid is True  # the manifest itself is honestly signed
+    assert report.artifacts["../secret.txt"] == "INVALID_PATH"
+    assert report.artifacts[str(outside)] == "INVALID_PATH"
+    assert report.ok is False
+
+
+def test_verify_never_hashes_anything_when_signature_invalid(tmp_path):
+    """An attacker who edits the manifest (e.g. to add a path-escaping entry)
+
+    without the private key invalidates the signature; verify must refuse
+    to hash ANY listed path in that case, including the ones that would
+    have been legitimate, and must not touch the escaping path either.
+    """
+    root = _tiny_repo(tmp_path)
+    priv, pub = _write_keypair(tmp_path)
+    manifest = build_manifest(discover_artifacts(root), root)
+    out_path = sign_manifest(manifest, key_path=priv, out_path=root / "provenance" / "manifest.json")
+
+    outside = tmp_path / "secret.txt"
+    outside.write_text("outside the checkout")
+    raw = json.loads(out_path.read_text())
+    raw["artifacts"]["../secret.txt"] = hashlib.sha256(outside.read_bytes()).hexdigest()
+    out_path.write_text(json.dumps(raw))  # NOT re-signed -- signature now stale
+
+    report = verify(root, pub, manifest_path=out_path)
+    assert report.signature_valid is False
+    assert set(report.artifacts.values()) == {"UNVERIFIED"}
+    assert report.ok is False
+
+
+# --------------------------------------------------------------------------
+# I2: fail closed on malformed signature material.
+# --------------------------------------------------------------------------
+
+
+def test_verify_garbage_base64_signature_is_invalid_not_a_crash(tmp_path):
+    root = _tiny_repo(tmp_path)
+    priv, pub = _write_keypair(tmp_path)
+    manifest = build_manifest(discover_artifacts(root), root)
+    out_path = sign_manifest(manifest, key_path=priv, out_path=root / "provenance" / "manifest.json")
+
+    raw = json.loads(out_path.read_text())
+    raw["signature_b64"] = "not valid base64 !!! ??"
+    out_path.write_text(json.dumps(raw))
+
+    report = verify(root, pub, manifest_path=out_path)
+    assert report.signature_valid is False
+    assert report.ok is False
+
+
+def test_verify_missing_signature_key_is_invalid_not_a_crash(tmp_path):
+    root = _tiny_repo(tmp_path)
+    priv, pub = _write_keypair(tmp_path)
+    manifest = build_manifest(discover_artifacts(root), root)
+    out_path = sign_manifest(manifest, key_path=priv, out_path=root / "provenance" / "manifest.json")
+
+    raw = json.loads(out_path.read_text())
+    del raw["signature_b64"]
+    out_path.write_text(json.dumps(raw))
+
+    report = verify(root, pub, manifest_path=out_path)
+    assert report.signature_valid is False
+    assert report.ok is False
+
+
+# --------------------------------------------------------------------------
+# I3: editing the manifest's own content -- an artifact hash, or meta --
+# must invalidate the signature. This is the exact attack signing exists
+# to catch.
+# --------------------------------------------------------------------------
+
+
+def test_verify_edited_artifact_hash_invalidates_signature(tmp_path):
+    root = _tiny_repo(tmp_path)
+    priv, pub = _write_keypair(tmp_path)
+    manifest = build_manifest(discover_artifacts(root), root)
+    out_path = sign_manifest(manifest, key_path=priv, out_path=root / "provenance" / "manifest.json")
+
+    # Tamper the artifact on disk AND rewrite the manifest's recorded hash
+    # to match the tampered bytes -- the attack signing is meant to defeat.
+    target = root / "models" / "breast-cancer" / "model.json"
+    data = bytearray(target.read_bytes())
+    data[0] ^= 0xFF
+    target.write_bytes(bytes(data))
+
+    raw = json.loads(out_path.read_text())
+    raw["artifacts"]["models/breast-cancer/model.json"] = hashlib.sha256(bytes(data)).hexdigest()
+    out_path.write_text(json.dumps(raw))  # NOT re-signed
+
+    report = verify(root, pub, manifest_path=out_path)
+    assert report.signature_valid is False
+    assert report.ok is False
+
+
+def test_verify_edited_meta_invalidates_signature(tmp_path):
+    root = _tiny_repo(tmp_path)
+    priv, pub = _write_keypair(tmp_path)
+    manifest = build_manifest(discover_artifacts(root), root)
+    out_path = sign_manifest(manifest, key_path=priv, out_path=root / "provenance" / "manifest.json")
+
+    raw = json.loads(out_path.read_text())
+    raw["meta"]["author"] = "Someone Else"
+    out_path.write_text(json.dumps(raw))  # NOT re-signed
+
+    report = verify(root, pub, manifest_path=out_path)
+    assert report.signature_valid is False
+    assert report.ok is False
 
 
 # --------------------------------------------------------------------------
@@ -240,24 +386,39 @@ def test_fingerprint_renamed_and_stripped_copy_still_matches(tmp_path):
 
 def test_fingerprint_perturbed_leaves_no_match(tmp_path):
     data = _load("breast-cancer")
-    # breast-cancer's isotonic calibrator saturates most canary rows to a
-    # boundary value (5/8 pin to 1.0), so a small nudge to every leaf can be
-    # invisible in p_cal even though p_raw moved (+1e-2 lands every row
-    # right back on 1.0, which by coincidence equals kidney-disease's fully
-    # saturated canary vector -- exactly the false-match risk this test
-    # exists to avoid). -5e-3 is large enough to move several canary rows
-    # off their saturation plateau without landing on any other condition's
-    # canary vector (checked against all six committed p_cal vectors).
     for tree in data["trees"]:
         for node in tree:
             if node["f"] == _LEAF:
-                node["v"] = node["v"] - 5e-3
+                node["v"] = node["v"] + 1e-3
     copy_path = tmp_path / "perturbed.json"
     copy_path.write_text(json.dumps(data))
 
     report = fingerprint(copy_path)
     assert report.condition is None
     assert report.matched is False
+    assert "breast-cancer" not in report.matches
+
+
+def test_fingerprint_cross_condition_collision_rejected(tmp_path):
+    """A +1e-2 leaf perturbation saturates breast-cancer's canary ``p_cal``
+    vector to all-``1.0`` -- which happens to equal kidney-disease's own
+    fully-saturated canary ``p_cal`` vector. A p_cal-based fingerprint would
+    have reported this tampered breast-cancer copy as an AUTHENTIC
+    kidney-disease model. The p_raw-based, reference-pinned design must
+    reject it outright, not merely reject it as breast-cancer.
+    """
+    data = _load("breast-cancer")
+    for tree in data["trees"]:
+        for node in tree:
+            if node["f"] == _LEAF:
+                node["v"] = node["v"] + 1e-2
+    copy_path = tmp_path / "perturbed.json"
+    copy_path.write_text(json.dumps(data))
+
+    report = fingerprint(copy_path)
+    assert report.condition != "kidney-disease"
+    assert report.condition is None
+    assert report.matches == []
 
 
 # --------------------------------------------------------------------------
@@ -292,13 +453,21 @@ def test_no_private_pem_or_private_dir_tracked_by_git():
     assert not any(f.startswith(".claude/") for f in tracked)
 
 
-def test_signing_key_not_under_repo_root():
-    import os
+def test_signing_key_exists_matches_committed_pubkey_and_lives_outside_repo():
+    """The real signing key: present, a valid Ed25519 private key, its public
 
-    key_path = Path(
-        os.environ.get(
-            "NIGHTINGALE_SIGNING_KEY",
-            "/Users/safdarhussain/Desktop/Projects/GitHub/.claude/keys/nightingale_ed25519.pem",
-        )
-    ).resolve()
-    assert not str(key_path).startswith(str(REPO_ROOT.resolve()) + os.sep)
+    half byte-identical to the committed ``provenance/pubkey.pem``, and
+    resolved to a location outside this checkout. (An earlier version of
+    this test compared the same hardcoded path string to itself, which
+    could never fail regardless of where the key actually was.)
+    """
+    assert SIGNING_KEY_PATH.is_file(), f"no signing key at {SIGNING_KEY_PATH}"
+
+    key = load_pem_private_key(SIGNING_KEY_PATH.read_bytes(), password=None)
+    assert isinstance(key, Ed25519PrivateKey)
+
+    public_pem = key.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
+    committed_pem = (REPO_ROOT / "provenance" / "pubkey.pem").read_bytes()
+    assert public_pem == committed_pem
+
+    assert not str(SIGNING_KEY_PATH.resolve()).startswith(str(REPO_ROOT.resolve()) + os.sep)
