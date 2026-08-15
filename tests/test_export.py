@@ -649,7 +649,18 @@ def test_committed_conformal_qhat_matches_the_published_oof(slug):
 # --------------------------------------------------------------------------
 
 
-def _assert_same_shape_and_numbers(fresh, stored, tol=1e-9, path="model"):
+#: Cross-platform tolerance for the committed-bundle comparison. Leaf values
+#: and split thresholds are stored float32, and XGBoost's histogram arithmetic
+#: lands on a neighbouring float32 on a different architecture -- one ULP at
+#: float32 is ~1.19e-07 relative, and the observed linux/x86_64-vs-macOS/arm64
+#: difference is 7.5e-08. 1e-06 leaves headroom for a couple of ULP while
+#: staying orders of magnitude below anything that could move a prediction:
+#: the walker-vs-predict_proba gate on real rows is itself only 1e-06, and it
+#: passes on both platforms.
+CROSS_PLATFORM_TOL = 1e-6
+
+
+def _assert_same_shape_and_numbers(fresh, stored, tol=CROSS_PLATFORM_TOL, path="model"):
     """Assert two decoded bundles agree: structure exactly, floats to ``tol``.
 
     Structure -- keys, list lengths, strings, ints, and which values are null --
@@ -686,14 +697,14 @@ def test_export_is_deterministic_and_matches_the_committed_bundle(tmp_path):
        gives identical bytes, which is what Task 11's signing depends on --
        and why ``provenance.built_utc`` is HEAD's commit timestamp rather than
        the wall clock. This holds everywhere.
-    2. Agreement with the *committed* bundle, to a 1e-9 relative tolerance
+    2. Agreement with the *committed* bundle, to ``CROSS_PLATFORM_TOL``
        rather than exact equality. The committed artifacts were exported on
-       macOS/arm64; XGBoost's training arithmetic differs in the last unit in
-       the last place on other platforms, so CI on linux/x86_64 sees leaf
-       values like 34.72546770926949 against 34.725467709269495. That is a
-       ~1e-16 relative difference and cannot change a prediction meaningfully,
-       but it is not bit-identity, and claiming bit-identity across
-       architectures would be false. Structure is still compared exactly.
+       macOS/arm64; leaf values and thresholds are stored float32, and
+       XGBoost's histogram arithmetic lands on a neighbouring float32 on a
+       different architecture -- CI on linux/x86_64 produced 0.04965406656265259
+       where this machine produced 0.04965406283736229, one float32 ULP apart.
+       Claiming bit-identity across architectures would be false, so the suite
+       does not. Structure is still compared exactly.
     """
     written = export_model(FAST_SLUG, out_dir=tmp_path)
     again = export_model(FAST_SLUG, out_dir=tmp_path / "again")
