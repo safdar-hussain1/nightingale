@@ -649,27 +649,67 @@ def test_committed_conformal_qhat_matches_the_published_oof(slug):
 # --------------------------------------------------------------------------
 
 
+def _assert_same_shape_and_numbers(fresh, stored, tol=1e-9, path="model"):
+    """Assert two decoded bundles agree: structure exactly, floats to ``tol``.
+
+    Structure -- keys, list lengths, strings, ints, and which values are null --
+    must match exactly; a drifted tree shape or a renamed feature is still a
+    hard failure. Only float leaves are compared with a tolerance, and see
+    the caller for why that tolerance exists at all.
+    """
+    assert type(fresh) is type(stored), f"{path}: type differs"
+    if isinstance(stored, dict):
+        assert set(fresh) == set(stored), f"{path}: keys differ"
+        for k in stored:
+            _assert_same_shape_and_numbers(fresh[k], stored[k], tol, f"{path}.{k}")
+    elif isinstance(stored, list):
+        assert len(fresh) == len(stored), f"{path}: length differs"
+        for i, (a, b) in enumerate(zip(fresh, stored)):
+            _assert_same_shape_and_numbers(a, b, tol, f"{path}[{i}]")
+    elif isinstance(stored, float):
+        assert fresh == pytest.approx(stored, rel=tol, abs=tol), f"{path}: {fresh} != {stored}"
+    else:
+        assert fresh == stored, f"{path}: {fresh!r} != {stored!r}"
+
+
 def test_export_is_deterministic_and_matches_the_committed_bundle(tmp_path):
-    """Re-exporting ``breast-cancer`` reproduces the committed file byte for byte.
+    """Re-exporting ``breast-cancer`` reproduces the committed bundle.
 
     This is the test that keeps ``models/breast-cancer/model.json`` honest:
     if the trees, the calibrator, q_hat, the feature contract or the canary
-    values drift from what ``train_condition`` actually produces, the bytes
-    differ and this fails. It also pins the byte-reproducibility Task 11's
-    signing depends on -- which is why ``provenance.built_utc`` is the HEAD
-    commit's timestamp rather than the wall clock.
+    values drift from what ``train_condition`` actually produces, this fails.
+
+    Two different guarantees are checked, because they hold over different
+    scopes:
+
+    1. *Byte* determinism on the machine doing the exporting. Exporting twice
+       gives identical bytes, which is what Task 11's signing depends on --
+       and why ``provenance.built_utc`` is HEAD's commit timestamp rather than
+       the wall clock. This holds everywhere.
+    2. Agreement with the *committed* bundle, to a 1e-9 relative tolerance
+       rather than exact equality. The committed artifacts were exported on
+       macOS/arm64; XGBoost's training arithmetic differs in the last unit in
+       the last place on other platforms, so CI on linux/x86_64 sees leaf
+       values like 34.72546770926949 against 34.725467709269495. That is a
+       ~1e-16 relative difference and cannot change a prediction meaningfully,
+       but it is not bit-identity, and claiming bit-identity across
+       architectures would be false. Structure is still compared exactly.
     """
     written = export_model(FAST_SLUG, out_dir=tmp_path)
+    again = export_model(FAST_SLUG, out_dir=tmp_path / "again")
+    assert written.read_bytes() == again.read_bytes(), (
+        "exporting twice on one machine must be byte-identical"
+    )
+
     committed = MODELS_ROOT / FAST_SLUG / "model.json"
     fresh = json.loads(written.read_text())
     stored = json.loads(committed.read_text())
 
-    # provenance moves with HEAD, so compare it structurally and everything
-    # else exactly.
+    # provenance moves with HEAD, so compare it structurally only.
     assert set(fresh["provenance"]) == set(stored["provenance"])
     fresh.pop("provenance")
     stored.pop("provenance")
-    assert fresh == stored
+    _assert_same_shape_and_numbers(fresh, stored)
 
 
 @pytest.mark.parametrize("slug", ALL_SLUGS)

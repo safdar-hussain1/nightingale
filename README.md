@@ -246,6 +246,16 @@ Wall-clock is the only thing that moves between runs — the metrics and the
 written artifacts are byte-identical, because training is a deterministic
 function of `seed=42` and the gzip container pins `mtime=0`.
 
+That bit-identity is a promise about *one machine*, and the test suite says so
+in two separate assertions. Re-exporting on the same platform gives identical
+bytes; against the committed bundles, which were built on macOS/arm64, the
+suite allows a 1e-9 relative tolerance, because XGBoost's arithmetic differs in
+the last unit in the last place on other architectures — CI on linux/x86_64
+produces leaf values like `34.725467709269495` where this machine produced
+`34.72546770926949`. A ~1e-16 relative difference cannot move a prediction, but
+it is not bit-identity, so the repository does not claim it is. Structure —
+tree shapes, feature names, calibrator type — is compared exactly.
+
 There is deliberately no top-level `--condition`: argparse lets a subparser's
 flag silently shadow a same-named top-level one, so the flag is defined in
 exactly one place.
