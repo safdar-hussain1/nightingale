@@ -1,0 +1,46 @@
+# The suite, on every push and every pull request, against the two Python
+# versions this project supports.
+#
+# Deliberately no fetch step. `data/raw/` is gitignored, so a fresh checkout
+# has none of it, and the handful of tests that need raw data skip with an
+# actionable reason (see tests/conftest.py) instead of failing. Adding a
+# network fetch here would trade that honest, loud skip for a job whose colour
+# depends on a third-party archive being up. Everything the published numbers
+# rest on -- the committed cleaned data, the model bundles, the manifest -- is
+# in the checkout and is tested in full.
+#
+# The network-marked tests are deselected by pyproject's addopts and are not
+# run here for the same reason.
+
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # requirements.txt first, so pip resolves those pinned versions rather
+      # than the looser floors in pyproject.toml -- the same order the README
+      # gives a human.
+      - name: Install pinned dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install the package
+        run: pip install -e ".[dev]"
+
+      - name: Run the suite
+        run: pytest -q

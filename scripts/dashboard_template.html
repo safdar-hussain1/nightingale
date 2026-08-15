@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- Nightingale — © 2026 Safdar Hussain — github.com/safdar-hussain1/nightingale — MIT: this notice must be retained. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1887,6 +1888,10 @@ drawSites();
  *  the coxcomb are written against CSS variables and need no redraw.
  * ------------------------------------------------------------------ */
 onThemeChange(function () { if (HAVE_CHARTJS) { drawReliability(); drawDca(); } });
+
+/* One line, once, on load: the page says who wrote it even when it has been
+ * saved, renamed and reopened with no address bar to read. */
+console.log("Nightingale — © 2026 Safdar Hussain — github.com/safdar-hussain1/nightingale");
 
 /* ------------------------------------------------------------------ *
  *  ?selftest=1 — re-score every model's canaries through this page's own

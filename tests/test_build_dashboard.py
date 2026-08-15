@@ -161,6 +161,33 @@ def test_author_and_repo_credited(html):
     assert "github.com/safdar-hussain1/nightingale" in html
 
 
+# The four authorship marks, and why each one is separate: the ``<meta>`` tag
+# and the JSON-LD block are for machines, the footer is for a reader, and the
+# two below survive the two ways this page actually gets detached from its
+# origin — saved to disk and reopened (the source comment), or embedded in a
+# frame with the chrome hidden (the console line). A build that dropped either
+# would still look right, so they are asserted rather than eyeballed.
+
+
+def test_source_comment_carries_the_notice(html):
+    """A ``view-source`` reader meets the notice before anything else."""
+    assert (
+        "<!-- Nightingale — © 2026 Safdar Hussain — "
+        "github.com/safdar-hussain1/nightingale — MIT: this notice must be retained. -->"
+    ) in html
+    # Near the top: before the opening <html> tag, so it cannot be scrolled past.
+    assert html.index("<!-- Nightingale —") < html.index("<html lang=")
+
+
+def test_console_signature_is_present_and_unobtrusive(html):
+    """Exactly one console line on load — a signature, not a log stream."""
+    assert (
+        'console.log("Nightingale — © 2026 Safdar Hussain — '
+        'github.com/safdar-hussain1/nightingale")'
+    ) in html
+    assert html.count("console.log(") == 1
+
+
 def _score_body(html: str) -> str:
     """The body of the page's ``score()`` function, braces balanced."""
     start = html.index("function score()")

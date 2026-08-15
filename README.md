@@ -1,5 +1,7 @@
 # Nightingale
 
+[![tests](https://github.com/safdar-hussain1/nightingale/actions/workflows/tests.yml/badge.svg)](https://github.com/safdar-hussain1/nightingale/actions/workflows/tests.yml)
+
 Calibrated screening-triage risk models for six clinical conditions, built so
 every published number arrives with its uncertainty attached — and so the
 model you read about is provably the model that runs.
@@ -11,6 +13,18 @@ this repository ships.
 ![dashboard](reports/figures/dashboard.png)
 
 > These are screening-triage risk models trained on small public research datasets. They are not diagnostic devices and must not be used for medical decisions. The diabetes labels are self-reported survey responses. The cervical-cancer cohort has 55 positive biopsies.
+
+**Run it in 30 seconds — no install, no API key, no network:**
+
+```bash
+git clone https://github.com/safdar-hussain1/nightingale.git
+cd nightingale
+open docs/index.html            # Linux: xdg-open docs/index.html
+```
+
+That one file *is* all six models. For the Python side — the CLI, the tests, a
+retraining run — see [Quickstart](#quickstart) and
+[Every command](#every-command).
 
 ## What it does
 
@@ -145,6 +159,29 @@ pip install -e ".[dev]"          # then the package itself, plus pytest
 pytest -q
 ```
 
+Those exact steps were run against a fresh clone in a fresh `python3 -m venv`
+on macOS: `578 passed, 9 skipped, 8 deselected`. The nine skips are the tests
+that need `data/raw/`, which is gitignored — each one names the `nightingale
+fetch` command that would populate it. The eight deselected are network-marked.
+
+<details>
+<summary><strong>If <code>pytest</code> or <code>nightingale</code> says <code>ModuleNotFoundError: No module named 'nightingale'</code></strong></summary>
+
+The editable install's path file did not reach `sys.path`. It does not happen
+with the `python3 -m venv` above, but it does happen in some `uv`-built venvs.
+The fix is to put the sources on the path yourself:
+
+```bash
+export PYTHONPATH=src
+```
+
+Do **not** "fix" it with a non-editable `pip install .`. That copies the package
+into `site-packages`, so every path derived from `Path(__file__).parents[...]`
+resolves inside the venv instead of the repository, and the committed data and
+model bundles stop loading.
+
+</details>
+
 The trained models, cleaned datasets and metrics are all committed, so nothing
 below needs a training run to work.
 
@@ -168,7 +205,7 @@ condition: heart-disease
 p_raw: 0.871399
 p_cal: 0.846154
 verdict: positive
-provenance: commit=d2d599ef84f9f2b77a544310675ed8df575e2173 built_utc=2026-08-13T17:40:30Z author=Safdar Hussain
+provenance: commit=fa455101d29542eec2f71c7bbc39659f5f65d649 built_utc=2026-08-14T08:24:50Z author=Safdar Hussain
 ```
 
 Going back to raw data is two commands. `fetch` verifies a pinned SHA-256 for
@@ -196,26 +233,162 @@ nightingale train --condition heart-disease
 
 ```
 === heart-disease (Heart disease (four-hospital cohort)) ===
-  n=920 prevalence=0.5533 roc_auc=0.8892 [0.8663, 0.9101]  pr_auc=0.8892 [0.8616, 0.9167]  brier=0.1280 [0.1145, 0.1425]  ece=0.0236 [0.0202, 0.0536]  q_hat=0.6842 uncertain_rate=0.1946  wall=19.8s
+  n=920 prevalence=0.5533 roc_auc=0.8892 [0.8663, 0.9101]  pr_auc=0.8892 [0.8616, 0.9167]  brier=0.1280 [0.1145, 0.1425]  ece=0.0236 [0.0202, 0.0536]  q_hat=0.6842 uncertain_rate=0.1946  wall=19.5s
   wrote models/heart-disease/metrics.json
   wrote models/heart-disease/oof_predictions.csv.gz
   wrote reports/figures/heart-disease-reliability.png
   wrote reports/figures/heart-disease-decision-curve.png
 
-Total wall-clock (this invocation): 19.8s across 1 conditions
+Total wall-clock (this invocation): 19.5s across 1 conditions
 ```
 
 Wall-clock is the only thing that moves between runs — the metrics and the
 written artifacts are byte-identical, because training is a deterministic
 function of `seed=42` and the gzip container pins `mtime=0`.
 
-The remaining subcommands: `nightingale external` runs the four-hospital
-transfer study, `nightingale export` regenerates the browser bundles,
-`nightingale sign` re-signs the manifest with a private key kept outside the
-repository, and `nightingale verify` checks it. `nightingale <subcommand>
---help` prints every flag. There is deliberately no top-level `--condition`:
-argparse lets a subparser's flag silently shadow a same-named top-level one, so
-the flag is defined in exactly one place.
+There is deliberately no top-level `--condition`: argparse lets a subparser's
+flag silently shadow a same-named top-level one, so the flag is defined in
+exactly one place.
+
+## Every command
+
+The whole surface, in one block. Every line below was executed against this
+commit except the two that are marked; absolute paths in sample output are
+written as `/path/to/nightingale`.
+
+```bash
+# --- setup, once -----------------------------------------------------------
+git clone https://github.com/safdar-hussain1/nightingale.git
+cd nightingale
+python3 -m venv .venv
+source .venv/bin/activate           # Windows: .venv\Scripts\activate
+pip install -r requirements.txt     # pinned versions that reproduce the numbers
+pip install -e ".[dev]"             # the package itself, plus pytest
+
+# --- the six conditions ----------------------------------------------------
+# Every --condition takes exactly one of:
+#   breast-cancer  cervical-cancer  diabetes
+#   heart-disease  kidney-disease   liver-disease
+# Omit --condition and the subcommand runs all six.
+nightingale --help                  # the nine subcommands
+nightingale train --help            # every flag of one subcommand
+
+# --- data ------------------------------------------------------------------
+nightingale fetch --condition heart-disease           # SHA-256-pinned; network only when data/raw is empty
+nightingale fetch --condition heart-disease --force   # re-download even when cached
+nightingale clean --condition heart-disease           # -> data/cleaned/<slug>.csv.gz
+nightingale clean                                     # all six; byte-deterministic, so a re-run changes nothing
+
+# --- train, measure, validate ----------------------------------------------
+nightingale train --condition heart-disease           # ~20s. All six: ~6.5 min — see "Before you demo it"
+nightingale evaluate --condition heart-disease        # ~4s, recomputed from the committed OOF predictions
+nightingale evaluate --condition heart-disease --json
+nightingale evaluate                                  # all six: ~2 min, because diabetes is 253,680 rows
+nightingale external                                  # the four-hospital transfer study, ~25s
+nightingale external --seed 42 --json
+
+# --- export, sign, verify --------------------------------------------------
+nightingale export --condition heart-disease --out-dir /tmp/nightingale-export
+nightingale export --condition liver-disease --seed 42 --out-dir /tmp/nightingale-export
+nightingale export --condition heart-disease          # in place, into models/ — read the hazard note first
+nightingale sign                                      # key holder only: reads NIGHTINGALE_SIGNING_KEY
+nightingale sign --key path/to/private.pem --out provenance/manifest.json   # not run here: needs the private key
+nightingale verify                                    # 34 artifacts + signature; exit 0 / non-zero
+nightingale verify --json
+nightingale verify --manifest provenance/manifest.json --key provenance/pubkey.pem
+nightingale verify --fingerprint models/kidney-disease/model.json
+
+# --- score one row ---------------------------------------------------------
+nightingale predict --condition heart-disease --set age=58 --set sex=1 --set cp=4 --set thalach=140 --set oldpeak=1.5
+nightingale predict --condition kidney-disease --set sg=1.020 --set al=0 --set hemo=15.4 --json
+
+# --- tests -----------------------------------------------------------------
+pytest -q                           # the suite; network-marked tests are deselected by default
+pytest -q tests/test_parity.py      # just the Python-vs-JavaScript parity gate
+pytest -q -m network                # the 8 tests that do hit the network
+
+# --- the dashboard ---------------------------------------------------------
+python scripts/build_dashboard.py   # scripts/dashboard_template.html + artifacts -> docs/index.html
+open docs/index.html                # macOS
+xdg-open docs/index.html            # Linux — not run here: this machine is macOS
+python3 -m http.server 8000 --directory docs   # then open http://localhost:8000
+```
+
+`nightingale sign` is the one subcommand a visitor cannot run: the Ed25519
+private key is kept outside the repository, so a clone can `verify` but never
+re-sign. Everything else works from a plain checkout.
+
+### View the dashboard locally
+
+`docs/index.html` is self-contained — the six model bundles, the walker, the
+figures and the styles are all inlined, and the page never calls `fetch()` at
+runtime. So the file scheme is enough:
+
+```bash
+open docs/index.html                # macOS
+xdg-open docs/index.html            # Linux
+```
+
+A local server is not required, but it is the honest way to check two things
+the `file://` scheme cannot show you: that the page behaves under the same
+origin and MIME types GitHub Pages will serve it with, and that
+`docs/assets/walker.js` — the standalone copy the parity test scores, which
+the page inlines rather than links — is really being published beside it.
+
+```bash
+python3 -m http.server 8000 --directory docs
+```
+
+```
+HTTP 200  720943 bytes  text/html
+```
+
+Then open `http://localhost:8000`. Append `?selftest=1` to either scheme to
+make the page re-score its own canaries and report the result in the tab
+title; `?theme=dark` and `?theme=light` pin the plate.
+
+### Before you demo it
+
+Three things worth knowing before you run this in front of someone.
+
+**Training is safe.** `nightingale train` is byte-reproducible. Retraining
+heart-disease rewrites `metrics.json`, `oof_predictions.csv.gz` and both
+figures, and `nightingale verify` still passes — only `models/run_meta.json`
+changes, because it records wall-clock, which is why it is deliberately left
+out of the signed manifest. Nothing about a demo requires you to avoid
+retraining.
+
+**`nightingale export` will break `verify` after any new commit.** The export
+stamps the current `HEAD` into each bundle's provenance block, so re-exporting
+against a commit later than the one the manifest was signed at rewrites a
+signed file:
+
+```
+TAMPERED: models/heart-disease/model.json
+signature: valid
+TAMPERED
+```
+
+Exit code 1. The signature is still valid — it is the *artifact* that no
+longer matches the hash that was signed. Recovery is one command, because the
+bundles are committed:
+
+```bash
+git checkout -- models/
+```
+
+The alternative, available only to the key holder, is to re-sign:
+`nightingale sign` then `nightingale verify`. If you have nothing to re-export,
+the safe way to show the command is to send it somewhere else with
+`--out-dir /tmp/nightingale-export`, which touches nothing tracked.
+
+**Timing.** `nightingale evaluate --condition <one>` takes about four seconds
+and writes nothing — that is the one to run live. Prefer it to `train`, which
+is about 20s for heart disease and about six and a half minutes for all six.
+`nightingale evaluate` with no `--condition` is about two minutes, nearly all
+of it diabetes' 253,680-row bootstrap. `nightingale fetch` only touches the
+network when `data/raw/` is empty, so a warm checkout demos offline; on a cold
+one, fetch before the audience arrives.
 
 ## The browser runs the real model
 
@@ -354,6 +527,8 @@ models/
 docs/
   index.html      # the dashboard, served by GitHub Pages
   assets/walker.js
+  sitemap.xml     # for search indexing
+  .nojekyll       # serve the directory as-is, no Jekyll processing
 provenance/
   manifest.json   # SHA-256 per artifact + the Ed25519 signature
   pubkey.pem
