@@ -4,36 +4,69 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nightingale — Disease Risk Prediction: a statistical atlas of six clinical models</title>
-<meta name="description" content="Disease risk prediction done honestly: six calibrated clinical models — heart disease, diabetes, chronic kidney disease, liver disease, breast cancer and cervical cancer — running entirely in your browser, each printed with its uncertainty.">
+<title>Nightingale — Disease Risk Prediction in Your Browser</title>
+<meta name="description" content="Six calibrated risk models for heart, kidney and liver disease, diabetes, and breast and cervical cancer. They run in your browser and show their uncertainty.">
+<meta name="author" content="Safdar Hussain">
 <meta name="google-site-verification" content="0SIEfExLTSQj1qvnHWF5A5fY58KVl2lpIEnePP9CtI0">
 <link rel="canonical" href="https://safdar-hussain1.github.io/nightingale/">
-<meta property="og:title" content="Nightingale — Disease Risk Prediction in Your Browser">
-<meta property="og:description" content="Six calibrated clinical risk models with conformal uncertainty and four-hospital external validation — all running live in the browser, Ed25519-signed.">
-<meta property="og:url" content="https://safdar-hussain1.github.io/nightingale/">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23bf2f52'/%3E%3Cpath fill='%23f8f7f3' stroke='%23bf2f52' stroke-width='.9' stroke-linejoin='round' d='M16 16L16 3.5A12.5 12.5 0 0 1 26.83 9.75ZM16 16L23.36 11.75A8.5 8.5 0 0 1 23.36 20.25ZM16 16L25.53 21.5A11 11 0 0 1 16 27ZM16 16L16 23A7 7 0 0 1 9.94 19.5ZM16 16L7.34 21A10 10 0 0 1 7.34 11ZM16 16L8.64 11.75A8.5 8.5 0 0 1 16 7.5Z'/%3E%3C/svg%3E">
+
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Nightingale">
-<meta name="twitter:card" content="summary">
+<meta property="og:site_name" content="Safdar Hussain">
+<meta property="og:title" content="Nightingale — Disease Risk Prediction in Your Browser">
+<meta property="og:description" content="Six calibrated risk models for heart, kidney and liver disease, diabetes, and breast and cervical cancer. They run in your browser and show their uncertainty.">
+<meta property="og:url" content="https://safdar-hussain1.github.io/nightingale/">
+<meta property="og:image" content="https://safdar-hussain1.github.io/nightingale/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Nightingale masthead: the name in large serif type over “Six calibrated risk models, running in your browser, each printed with the interval it earned.”, and the read-this-first disclaimer.">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Nightingale — Disease Risk Prediction in Your Browser">
+<meta name="twitter:description" content="Six calibrated risk models for heart, kidney and liver disease, diabetes, and breast and cervical cancer. They run in your browser and show their uncertainty.">
+<meta name="twitter:image" content="https://safdar-hussain1.github.io/nightingale/og-image.png">
+<meta name="twitter:image:alt" content="The Nightingale masthead: the name in large serif type over “Six calibrated risk models, running in your browser, each printed with the interval it earned.”, and the read-this-first disclaimer.">
+
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  "name": "Nightingale",
-  "description": "Disease risk prediction: six calibrated clinical models (heart disease, diabetes, chronic kidney disease, liver disease, breast cancer, cervical cancer) with cross-fitted calibration, conformal uncertainty, four-hospital external validation, and an Ed25519-signed provenance chain. All six models run live in the browser.",
-  "url": "https://safdar-hussain1.github.io/nightingale/",
-  "applicationCategory": "MedicalApplication",
-  "operatingSystem": "Web browser",
-  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-  "codeRepository": "https://github.com/safdar-hussain1/nightingale",
-  "author": {
-    "@type": "Person",
-    "name": "Safdar Hussain",
-    "url": "https://github.com/safdar-hussain1",
-    "sameAs": ["https://www.linkedin.com/in/safdar-hussain-a8a61b248"]
-  }
+  "@graph": [
+    {
+      "@type": "WebApplication",
+      "name": "Nightingale",
+      "url": "https://safdar-hussain1.github.io/nightingale/",
+      "description": "Six calibrated risk models for heart, kidney and liver disease, diabetes, and breast and cervical cancer. They run in your browser and show their uncertainty.",
+      "image": "https://safdar-hussain1.github.io/nightingale/og-image.png",
+      "applicationCategory": "HealthApplication",
+      "operatingSystem": "Any (runs in a web browser)",
+      "browserRequirements": "Requires JavaScript",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "author": {
+        "@type": "Person",
+        "name": "Safdar Hussain",
+        "url": "https://github.com/safdar-hussain1",
+        "sameAs": ["https://github.com/safdar-hussain1",
+                   "https://www.linkedin.com/in/safdar-hussain-a8a61b248"]
+      }
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      "name": "Nightingale",
+      "codeRepository": "https://github.com/safdar-hussain1/nightingale",
+      "programmingLanguage": ["Python", "JavaScript"],
+      "license": "https://opensource.org/licenses/MIT",
+      "author": {
+        "@type": "Person",
+        "name": "Safdar Hussain",
+        "url": "https://github.com/safdar-hussain1",
+        "sameAs": ["https://github.com/safdar-hussain1",
+                   "https://www.linkedin.com/in/safdar-hussain-a8a61b248"]
+      }
+    }
+  ]
 }
 </script>
-<meta name="author" content="Safdar Hussain">
 <meta name="color-scheme" content="light dark">
 
 <script>
