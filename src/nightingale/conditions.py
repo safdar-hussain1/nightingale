@@ -60,8 +60,8 @@ CONDITIONS: dict[str, Condition] = {
         slug="cervical-cancer",
         display="Cervical cancer (risk factors)",
         source="UCI 383",
-        # ucimlrepo is broken/partial for this dataset (spec §2) — zip download
-        # of the full archive is required instead. "?" marks missing values in
+        # ucimlrepo returns a broken/partial copy of this dataset, so the full
+        # zip archive is downloaded instead. "?" marks missing values in
         # the raw CSV and must be treated as NaN during cleaning.
         fetch_mode="zip",
         fetch_ref="https://archive.ics.uci.edu/static/public/383/cervical+cancer+risk+factors.zip",

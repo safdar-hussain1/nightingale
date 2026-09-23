@@ -27,7 +27,7 @@ EXPECTED_N_ROWS = {
     "diabetes": 253680,
 }
 
-# ucimlrepo is broken/partial for these two (spec §2) — must use zip fetch.
+# ucimlrepo returns broken/partial copies of these two, so both must use the zip fetch.
 EXPECTED_ZIP_ONLY = {"cervical-cancer", "heart-disease"}
 
 

@@ -14,7 +14,7 @@ this whole file is raw-data-free and runs on a fresh clone.
 The three mutation tests (A: calibration leak, B: fold integrity, C:
 fold-safe encoding) each prove a specific protection is *live* in
 train_condition, not merely that the underlying primitive works in
-isolation -- see nightingale.sentinel and the task brief's spec §4.5.
+isolation (the primitives themselves live in nightingale.sentinel).
 
 Also covers cross-fitted calibration (oof["p_cal"]): a correction made
 after an initial version of this module reported a calibrated ECE of
