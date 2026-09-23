@@ -160,9 +160,12 @@ pytest -q
 ```
 
 Those exact steps were run against a fresh clone in a fresh `python3 -m venv`
-on macOS: `578 passed, 9 skipped, 8 deselected`. The nine skips are the tests
-that need `data/raw/`, which is gitignored — each one names the `nightingale
-fetch` command that would populate it. The eight deselected are network-marked.
+on macOS: `587 passed, 9 skipped, 8 deselected`. The nine skips are the tests
+that need `data/raw/`, which is gitignored — each skip message names the
+one-line fetch call that would populate it (`nightingale fetch` fetches all six
+at once). The eight deselected are network-marked. On a machine without the
+project's signing key, one more test skips: the check that the private key
+matches `provenance/pubkey.pem`.
 
 <details>
 <summary><strong>If <code>pytest</code> or <code>nightingale</code> says <code>ModuleNotFoundError: No module named 'nightingale'</code></strong></summary>
@@ -350,7 +353,7 @@ python3 -m http.server 8000 --directory docs
 ```
 
 ```
-HTTP 200  720943 bytes  text/html
+HTTP 200  723054 bytes  text/html
 ```
 
 Then open `http://localhost:8000`. Append `?selftest=1` to either scheme to
@@ -538,6 +541,7 @@ docs/
   index.html      # the dashboard, served by GitHub Pages
   assets/walker.js
   sitemap.xml     # for search indexing
+  og-image.png    # the preview image shown when the page link is shared (1200x630)
   .nojekyll       # serve the directory as-is, no Jekyll processing
 provenance/
   manifest.json   # SHA-256 per artifact + the Ed25519 signature
