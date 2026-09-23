@@ -160,12 +160,12 @@ pytest -q
 ```
 
 Those exact steps were run against a fresh clone in a fresh `python3 -m venv`
-on macOS: `587 passed, 9 skipped, 8 deselected`. The nine skips are the tests
-that need `data/raw/`, which is gitignored — each skip message names the
+on macOS: `586 passed, 10 skipped, 8 deselected`. Nine of the skips are the
+tests that need `data/raw/`, which is gitignored — each skip message names the
 one-line fetch call that would populate it (`nightingale fetch` fetches all six
-at once). The eight deselected are network-marked. On a machine without the
-project's signing key, one more test skips: the check that the private key
-matches `provenance/pubkey.pem`.
+at once). The tenth is the check that the private signing key matches
+`provenance/pubkey.pem`, which runs only when `NIGHTINGALE_SIGNING_KEY` is set
+to the key's path. The eight deselected are network-marked.
 
 <details>
 <summary><strong>If <code>pytest</code> or <code>nightingale</code> says <code>ModuleNotFoundError: No module named 'nightingale'</code></strong></summary>

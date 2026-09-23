@@ -2,9 +2,10 @@
 data/raw/
 
 # Private artifacts (signing keys, anything under private/) — never committed.
-# `keys/` matches a directory of that name at any depth, which covers the
-# out-of-checkout key directory this project signs from; the public half of
-# the signing keypair is the one committed .pem.
+# The private signing key lives outside the checkout and is supplied through
+# NIGHTINGALE_SIGNING_KEY; `keys/` matches a directory of that name at any
+# depth, so a key directory copied into the checkout is ignored too. The
+# public half of the signing keypair is the one committed .pem.
 private/
 keys/
 *.pem
