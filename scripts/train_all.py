@@ -83,9 +83,12 @@ SUBGROUP_MIN_N = 40
 DCA_THRESHOLDS = np.linspace(0.01, 0.99, 99)
 
 # gzip embeds a Unix mtime in its header by default, which would make two
-# writes of byte-identical DataFrame content produce different files --
-# breaking the signed Ed25519 provenance manifest (see nightingale/clean.py's
-# _GZIP_COMPRESSION, which this mirrors exactly for the same reason).
+# writes of byte-identical DataFrame content produce different files, so a
+# rerun that changed nothing would still show every committed
+# oof_predictions.csv.gz as modified. Pinning mtime=0 keeps an unchanged
+# rerun byte-identical. (These files are not in the signed manifest;
+# nightingale/clean.py pins mtime the same way for the cleaned CSVs, which
+# are.)
 _GZIP_COMPRESSION = {"method": "gzip", "mtime": 0}
 
 # ---------------------------------------------------------------------------
