@@ -8,14 +8,15 @@ score naive + intercept-recalibrated transfer on hungarian/switzerland/va),
 writes the deterministic result to ``models/heart-disease/external.json``,
 and renders ``reports/figures/external-validation.png`` -- per-site AUC with
 bootstrap CIs (left) and per-site ECE before/after intercept recalibration
-(right), watermarked to match the Task 8 figures.
+(right), watermarked to match the per-condition figures from
+``scripts/train_all.py``.
 
 Reproducibility note, same discipline as ``scripts/train_all.py``: no
 ``generated_utc``/wall-clock field is written into ``external.json`` itself
--- ``transfer_study`` is a deterministic function of ``seed``, so a signed
-artifact (Task 11) must reproduce byte-for-byte on an honest rerun. This
-script's own stdout reports wall-clock for the human running it, but that
-number never enters the JSON.
+-- ``transfer_study`` is a deterministic function of ``seed``, so an artifact
+covered by the signed provenance manifest must reproduce byte-for-byte on an
+honest rerun. This script's own stdout reports wall-clock for the human
+running it, but that number never enters the JSON.
 """
 
 from __future__ import annotations

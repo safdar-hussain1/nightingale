@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 """Tests for the ``nightingale`` CLI (:mod:`nightingale.cli`).
 
-Covers the binding requirements from the Task 12 brief: no top-level
+Covers the CLI's hard requirements: no top-level
 ``--condition`` (each subcommand owns its own flags — the argparse
 parent-flag shadowing gotcha); ``predict`` on breast-cancer with no
 ``--set`` at all still returns a valid probability (an all-NaN row is a

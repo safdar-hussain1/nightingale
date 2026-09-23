@@ -4,8 +4,8 @@
 """Tests for the nested-CV training core (nightingale.model).
 
 Real training here is restricted to breast-cancer (569 rows, trains in
-seconds) -- diabetes (253,680 rows) is never trained in this suite, per the
-task brief. Everything else uses small synthetic frames.
+seconds) -- diabetes (253,680 rows) is never trained in this suite, since a
+single fit takes minutes. Everything else uses small synthetic frames.
 
 Reads the committed data/cleaned/breast-cancer.csv.gz directly for the
 comparison in test_train_condition_breast_cancer_oof_shape_and_quality, so
@@ -29,11 +29,11 @@ index level (every row's p_cal comes from a calibrator fit on rows
 excluding it), not just via the aggregate ECE gap.
 
 Also covers TrainResult.calibrator (the DEPLOYMENT calibrator, distinct
-from oof["p_cal"] above): a reviewer applied the brief's named mutation --
-fit final_model first, then build the calibrator from
+from oof["p_cal"] above): applying the obvious mutation -- fit final_model
+first, then build the calibrator from
 final_model.predict_proba(X_all_enc)[:, 1] instead of pooled OOF p_raw --
-and found every test in this file still passed, because none of them
-asserted the calibrator's fitted VALUES, only its shape/behaviour.
+left every test in this file passing, because none of them asserted the
+calibrator's fitted VALUES, only its shape/behaviour.
 test_deployment_calibrator_matches_independent_oof_refit closes that gap.
 """
 
@@ -149,7 +149,7 @@ def test_stratified_subsample_shrinks_to_n_and_stays_seeded():
 
 
 # ---------------------------------------------------------------------------
-# Required test 4: train_condition("breast-cancer") shape + quality floor
+# train_condition("breast-cancer"): shape + quality floor
 # ---------------------------------------------------------------------------
 
 
@@ -322,7 +322,7 @@ def test_one_hot_fold_safe_preserves_numeric_nan_untouched():
 
 
 # ---------------------------------------------------------------------------
-# Cross-fitted calibration (Fix round 1: p_cal must be out-of-sample)
+# Cross-fitted calibration (p_cal must be out-of-sample)
 # ---------------------------------------------------------------------------
 #
 # An earlier version of train_condition fit ONE calibrator on the full
@@ -426,15 +426,15 @@ def test_cross_fit_calibration_excludes_each_rows_own_fold(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Deployment calibrator value-level regression (Fix round 2)
+# Deployment calibrator value-level regression
 # ---------------------------------------------------------------------------
 #
-# Fix round 1 (above) secured oof["p_cal"] against in-sample scoring. But
-# TrainResult.calibrator -- the separate DEPLOYMENT artifact Task 10 will
-# export to score real users' inputs in the browser -- was, until this
-# fix, protected by nothing but an implicit ordering accident (the
-# calibrator happened to be built before final_model was fit). A reviewer
-# proved this by applying the brief's literal named mutation -- fit
+# The cross-fitted calibration tests (above) secure oof["p_cal"] against
+# in-sample scoring. But TrainResult.calibrator -- the separate DEPLOYMENT
+# artifact nightingale.export writes into model.json to score real users'
+# inputs in the browser -- was, until this fix, protected by nothing but an
+# implicit ordering accident (the calibrator happened to be built before
+# final_model was fit). Applying the obvious mutation proved it -- fit
 # final_model first, then construct the calibrator from
 # final_model.predict_proba(X_all_enc)[:, 1] instead of pooled OOF p_raw --
 # and running the whole file: 15/15 passed. Nothing before this test

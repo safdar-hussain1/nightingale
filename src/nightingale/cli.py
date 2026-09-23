@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 """``nightingale`` — one command-line entry point over the whole pipeline.
 
-Nine subcommands, one per task this project's pipeline is built from:
+Nine subcommands, one per stage of this project's pipeline:
 ``fetch``, ``clean``, ``train``, ``evaluate``, ``external``, ``export``,
 ``sign``, ``verify``, ``predict``. Every subcommand owns its own flags —
 there is deliberately NO top-level ``--condition`` (or any other shared
@@ -13,8 +13,8 @@ warning), so the only safe fix is never defining the same flag at both
 levels. :func:`build_parser` is asserted, by an introspection test, to
 carry no top-level ``--condition`` option for exactly this reason.
 
-Each subcommand is a THIN wrapper: the actual work happens in the modules
-Tasks 2–11 already built and tested (:mod:`nightingale.fetch`,
+Each subcommand is a THIN wrapper: the actual work happens in the pipeline
+modules, each already tested on its own (:mod:`nightingale.fetch`,
 :mod:`nightingale.clean`, ``scripts/train_all.py``,
 :mod:`nightingale.evaluate`, :mod:`nightingale.external`,
 :mod:`nightingale.export`, :mod:`nightingale.provenance`). This module adds
@@ -22,7 +22,7 @@ no modelling logic of its own.
 
 ``train`` calls ``scripts/train_all.py``'s ``run(slugs)`` directly (loaded
 via :func:`_load_train_all`, since ``scripts/`` is not an installed
-package) rather than shelling out via ``subprocess`` — Task 8's own
+package) rather than shelling out via ``subprocess`` — the script's own
 artifact-writing, figure-rendering, ``run_meta.json``-merging behaviour is
 reused byte for byte, not reimplemented.
 

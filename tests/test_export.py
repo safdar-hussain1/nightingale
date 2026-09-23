@@ -694,9 +694,9 @@ def test_export_is_deterministic_and_matches_the_committed_bundle(tmp_path):
     scopes:
 
     1. *Byte* determinism on the machine doing the exporting. Exporting twice
-       gives identical bytes, which is what Task 11's signing depends on --
-       and why ``provenance.built_utc`` is HEAD's commit timestamp rather than
-       the wall clock. This holds everywhere.
+       gives identical bytes, which is what the signed provenance manifest
+       depends on -- and why ``provenance.built_utc`` is HEAD's commit
+       timestamp rather than the wall clock. This holds everywhere.
     2. Agreement with the *committed* bundle, to ``CROSS_PLATFORM_TOL``
        rather than exact equality. The committed artifacts were exported on
        macOS/arm64; leaf values and thresholds are stored float32, and
@@ -733,11 +733,12 @@ def test_exported_walker_matches_predict_proba_on_real_data(slug):
     they are the ones that sit exactly on ``hist`` split points, so this
     also exercises the float32 comparison on every condition.
 
-    Runtime: each condition has to be refit, because Task 8 persisted
-    metrics and OOF predictions but no fitted estimator. ``train_result``
-    memoises per process, and diabetes (~5 min to fit, 253,680 rows) is
-    scored on a seeded 2,000-row sample rather than the whole frame --
-    sampling only reduces how many rows are checked, never how tightly.
+    Runtime: each condition has to be refit, because ``scripts/train_all.py``
+    persists metrics and OOF predictions but no fitted estimator.
+    ``train_result`` memoises per process, and diabetes (~5 min to fit,
+    253,680 rows) is scored on a seeded 2,000-row sample rather than the
+    whole frame -- sampling only reduces how many rows are checked, never how
+    tightly.
     """
     result = train_result(slug)
     encoded = encoded_frame(slug)

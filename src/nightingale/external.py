@@ -4,7 +4,8 @@
 """Four-hospital external validation: train on Cleveland, transfer elsewhere.
 
 This is the project's honesty centrepiece. Every other trained model in
-this repo (Task 5/8) is fit on data POOLED across whichever sites a
+this repo (:func:`nightingale.model.train_condition`, as run by
+``scripts/train_all.py``) is fit on data POOLED across whichever sites a
 condition has -- heart-disease's pooled model, in particular, is trained on
 all four hospitals at once. That pooled setup can never show what happens
 when a model built at one hospital is deployed, unmodified, at a
@@ -13,7 +14,7 @@ real-world situation for a model that ships as software rather than being
 refit locally everywhere it's used.
 
 :func:`transfer_study` trains a model on Cleveland's 303 rows ONLY (the
-richest-quality, most-complete site -- Phase 0's profile: 1% missing
+richest-quality, most-complete site -- its raw-data profile: 1% missing
 `ca`/`thal`, no cholesterol sentinel corruption), using the exact nested-CV
 protocol :func:`nightingale.model.train_condition` uses internally --
 reusing that module's private helpers (:func:`_outer_splits`,
@@ -28,8 +29,8 @@ orchestrates those helpers over a site-filtered frame instead of calling
 For each of the three sites Cleveland's model never saw --
 ``hungarian``/``switzerland``/``va`` -- :func:`transfer_study` reports THREE
 blocks per site, and their names are deliberately unambiguous about which
-row set each one is computed on (fix round 1 -- see :func:`transfer_study`'s
-own docstring for the full story of why the schema is shaped this way):
+row set each one is computed on (see :func:`transfer_study`'s own docstring
+for the full story of why the schema is shaped this way):
 
 1. **``naive_all_rows``**: the Cleveland-trained-and-calibrated pipeline
    (``final_model.predict_proba`` run through the Cleveland-fitted
@@ -373,7 +374,8 @@ def _score_site(cleveland_train: dict, site_df: pd.DataFrame) -> tuple[np.ndarra
 # ---------------------------------------------------------------------------
 # JSON safety net (mirrors scripts/train_all.py's own _json_safe, applied
 # here so transfer_study's return value is guaranteed JSON-safe regardless
-# of what writes it to disk -- see the CONTRACT's "byte-reproducible" note).
+# of what writes it to disk -- see transfer_study's docstring: the same seed
+# must always give byte-identical JSON).
 # ---------------------------------------------------------------------------
 
 
@@ -405,7 +407,7 @@ def transfer_study(seed: int = 42) -> dict:
     two calls with the same seed produce byte-identical JSON (pinned by
     ``tests/test_external.py::test_transfer_study_is_deterministic_across_two_independent_calls``).
 
-    **Schema, and why it's shaped this way (fix round 1):** each site's
+    **Schema, and why it's shaped this way:** each site's
     ``"naive"`` and ``"recalibrated"`` blocks are DIRECT SIBLINGS, and both
     are computed on the IDENTICAL 70% evaluation row set -- ``"naive"`` is
     ``p_naive`` scored on ``eval_idx`` (no recalibration applied),

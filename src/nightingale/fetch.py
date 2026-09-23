@@ -36,9 +36,7 @@ from nightingale.conditions import CONDITIONS, Condition
 RAW_ROOT = Path(__file__).resolve().parents[2] / "data" / "raw"
 
 # {slug: {filename: sha256_hexdigest}}. Populated by hand-running `fetch`
-# for real once per slug and hard-coding the observed digests. The exact
-# commands that produced these values are recorded in the project's private
-# build notes, kept outside this checkout.
+# for real once per slug and hard-coding the observed digests.
 PINNED_SHA256: dict[str, dict[str, str]] = {
     "breast-cancer": {
         "features.csv": "66e90ef939e5965e805cf62008e8df2d8ae022ac683f517ecf3a6ad476ce6e04",

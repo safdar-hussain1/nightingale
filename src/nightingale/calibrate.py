@@ -10,9 +10,9 @@ calls :func:`nightingale.sentinel.assert_calibrator_held_out` in its own
 code path):
 
 - :class:`SigmoidCalibrator` (Platt-style): ``p_cal = 1 / (1 + exp(a *
-  p_raw + b))``. This is the exact formula Task 10's JavaScript walker
-  re-implements verbatim, so ``a``/``b`` are usable directly against
-  ``p_raw`` with no intermediate logit transform.
+  p_raw + b))``. This is the exact formula the browser walker
+  (``docs/assets/walker.js``) re-implements verbatim, so ``a``/``b`` are
+  usable directly against ``p_raw`` with no intermediate logit transform.
 - :class:`IsotonicCalibrator`: piecewise-linear interpolation between
   ascending ``(x, y)`` breakpoints, clamped at the ends — exactly
   ``numpy.interp``'s semantics, again chosen so the JS port is a direct,
@@ -38,7 +38,7 @@ class Calibrator:
         raise NotImplementedError
 
     def export(self) -> dict:
-        """Serialise this calibrator to the JSON-able dict Task 10 consumes."""
+        """Serialise this calibrator to its JSON-able ``model.json`` block."""
         raise NotImplementedError
 
 
@@ -46,8 +46,8 @@ class SigmoidCalibrator(Calibrator):
     """Platt-style sigmoid calibrator.
 
     ``p_cal = 1 / (1 + exp(a * p_raw + b))`` -- note this applies directly
-    to the raw probability, not its logit. Task 10's JS re-implementation
-    must use this exact formula for parity.
+    to the raw probability, not its logit. The JS re-implementation in
+    ``docs/assets/walker.js`` must use this exact formula for parity.
     """
 
     def __init__(self, a: float, b: float):
@@ -69,7 +69,8 @@ class IsotonicCalibrator(Calibrator):
     at any ``p`` is linear interpolation between the two bracketing
     breakpoints, clamped to the first/last ``y`` value for ``p`` outside
     ``[x[0], x[-1]]`` -- exactly what ``numpy.interp`` does by default, which
-    is what both this class and Task 10's JS port implement.
+    is what both this class and the JS port in ``docs/assets/walker.js``
+    implement.
     """
 
     def __init__(self, x, y):

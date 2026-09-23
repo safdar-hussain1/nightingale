@@ -211,7 +211,7 @@ def test_raw_root_resolves_under_repo_root():
 # before calling fetch(), so none of them ever check that the committed
 # PINNED_SHA256 entries actually match the committed(-by-fetch) cache on
 # disk. A tampered or wrong pin for an already-cached slug would be
-# invisible without this test (mutation sweep task 17, gap 1).
+# invisible without this test.
 # ---------------------------------------------------------------------------
 
 

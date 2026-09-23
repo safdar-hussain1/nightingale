@@ -6,8 +6,8 @@
 Three earlier gates checked the framing word list, but each was scoped to a
 handful of named files: the three public documents, the generated dashboard,
 the two notebooks. Everything else -- source comments, test data, generated
-metadata, anything added later -- was unguarded, and that gap is exactly how
-process notes reached a tracked directory and survived. So the unit of the
+metadata, anything added later -- was unguarded, and that gap is exactly
+where a stray word could reach a tracked file and survive. So the unit of the
 guard here is not "the files we remembered to list"; it is ``git ls-files``.
 A file is in scope the moment it is tracked.
 

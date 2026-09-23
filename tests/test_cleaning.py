@@ -268,7 +268,7 @@ def test_clean_raises_cleaning_error_when_pipeline_produces_bad_shape(monkeypatc
 
 
 # ---------------------------------------------------------------------------
-# Deterministic output (provenance-manifest requirement, Task 4 fix round 1)
+# Deterministic output (a requirement of the signed provenance manifest)
 # ---------------------------------------------------------------------------
 
 
@@ -278,8 +278,8 @@ def test_cleaned_output_is_byte_reproducible(tmp_path, monkeypatch):
     skip_if_raw_missing("breast-cancer")
 
     # gzip embeds a Unix mtime in its header by default, which makes two
-    # writes of the identical DataFrame produce two different files. Task
-    # 11's Ed25519 provenance manifest needs `clean()`'s output to be
+    # writes of the identical DataFrame produce two different files. The
+    # signed Ed25519 provenance manifest needs `clean()`'s output to be
     # byte-for-byte reproducible so an honest, untouched, correctly
     # regenerated repo verifies as OK rather than TAMPERED. Redirect
     # CLEANED_ROOT to a scratch dir (rather than asserting against the real

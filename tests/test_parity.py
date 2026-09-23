@@ -51,8 +51,8 @@ N_CASES = 200
 # that split is load-bearing rather than decorative. Synthetic cases drawn
 # uniformly from each feature's [min, max] essentially never land exactly on
 # a split threshold, so they cannot detect a walker that compares in float64
-# instead of float32 -- a reviewer deleted Math.fround from walker.js and all
-# 1,200 synthetic parity cases still passed. Under tree_method="hist" the
+# instead of float32 -- with Math.fround deleted from walker.js, all 1,200
+# synthetic parity cases still passed. Under tree_method="hist" the
 # split points ARE observed data values, so real rows sit on thresholds
 # constantly: the same mutation moves p_cal on 21 of 2,400 real rows, worst
 # case by 0.316. See test_float32_rounding_is_load_bearing_in_js for the
@@ -360,8 +360,8 @@ def straddle_cases(model: dict) -> list[list]:
 def test_float32_rounding_is_load_bearing_in_js(slug, tmp_path):
     """Deleting ``Math.fround`` from walker.js MUST change its answers.
 
-    A reviewer removed ``Math.fround`` and every parity test still passed,
-    because uniformly-drawn cases never land on a split point. Two fixes:
+    With ``Math.fround`` removed, every parity test still passed, because
+    uniformly-drawn cases never land on a split point. Two fixes:
     :func:`build_cases` now mixes in real rows (which do), and this test
     removes the guesswork entirely by constructing inputs that straddle the
     float32/float64 boundary. Both the mutant's disagreement with the intact

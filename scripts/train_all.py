@@ -28,9 +28,10 @@ For each of the six condition slugs in :data:`nightingale.conditions.CONDITIONS`
    the exact schema.
 
 Reproducibility note (metrics.json does NOT carry a wall-clock timestamp):
-Task 11 signs every file under ``models/``, and a signed artifact must
-reproduce byte-for-byte on an honest rerun or ``nightingale verify`` reports
-a false TAMPERED. A ``generated_utc`` field stamped with the actual run time
+the signed provenance manifest (``nightingale sign``) covers every
+``models/<slug>/metrics.json``, and a signed artifact must reproduce
+byte-for-byte on an honest rerun or ``nightingale verify`` reports a false
+TAMPERED. A ``generated_utc`` field stamped with the actual run time
 would make that impossible by construction -- every rerun would differ in
 exactly one byte range even when nothing else changed. Decision made here:
 ``generated_utc`` is omitted from ``metrics.json`` entirely; the actual UTC
@@ -83,7 +84,7 @@ DCA_THRESHOLDS = np.linspace(0.01, 0.99, 99)
 
 # gzip embeds a Unix mtime in its header by default, which would make two
 # writes of byte-identical DataFrame content produce different files --
-# breaking Task 11's Ed25519 provenance manifest (see nightingale/clean.py's
+# breaking the signed Ed25519 provenance manifest (see nightingale/clean.py's
 # _GZIP_COMPRESSION, which this mirrors exactly for the same reason).
 _GZIP_COMPRESSION = {"method": "gzip", "mtime": 0}
 
@@ -91,8 +92,8 @@ _GZIP_COMPRESSION = {"method": "gzip", "mtime": 0}
 # Subgroup audit dimensions
 # ---------------------------------------------------------------------------
 
-# Sex/gender feature column per condition, where one exists (spec: heart
-# disease `sex`, liver-disease `sex_male`, diabetes `Sex`; cervical-cancer,
+# Sex/gender feature column per condition, where one exists (heart-disease
+# `sex`, liver-disease `sex_male`, diabetes `Sex`; cervical-cancer,
 # breast-cancer, and kidney-disease carry none).
 _SEX_COLUMN = {
     "heart-disease": "sex",
@@ -112,7 +113,7 @@ _AGE_COLUMN = {
 
 # diabetes's "Age" is NOT raw years -- it is the CDC BRFSS 13-level 5-year
 # age-group code (1 = 18-24, 2 = 25-29, ..., 13 = 80+), the standard coding
-# for this derived UCI 891 dataset. Mapped directly to the requested bands
+# for this derived UCI 891 dataset. Mapped directly to AGE_BAND_LABELS
 # rather than treated as a continuous year value.
 _BRFSS_AGE_CODE_TO_BAND = {
     1: "<45", 2: "<45", 3: "<45", 4: "<45", 5: "<45",
@@ -125,7 +126,7 @@ AGE_BAND_LABELS = ["<45", "45-54", "55-64", "65+"]
 
 
 def _age_band_from_years(age_years: pd.Series) -> pd.Series:
-    """Bucket a raw-years age column into the four requested bands.
+    """Bucket a raw-years age column into the :data:`AGE_BAND_LABELS` bands.
 
     ``right=False`` makes each bin half-open on the right (``[lo, hi)``),
     so integer ages land exactly where the band names say: 45-54 means

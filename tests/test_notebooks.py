@@ -16,8 +16,8 @@ retrain models) to pin three properties an executed, publishable notebook must h
 2. No cell's output contains an error (``output_type == "error"``) -- an executed
    notebook that raised partway through and was saved anyway is not a valid artifact.
 3. No banned word appears anywhere in the notebook (source or output), case-insensitive
-   -- notebooks are a public surface, and this project's own no-AI-attribution rule
-   applies to them exactly as it does to the README and the dashboard.
+   -- notebooks are a public surface, and the framing-word guard applies to them
+   exactly as it does to the README and the dashboard.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ from pathlib import Path
 
 import pytest
 
-# Same discipline as every other public surface here: no AI attribution, no trace
-# of how this project's writing got made. Spelled once, in fragments, in conftest.
+# Same framing-word guard as every other public surface here. Spelled once, in
+# fragments, in conftest.
 from conftest import BANNED_WORDS
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

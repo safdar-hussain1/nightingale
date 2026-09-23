@@ -7,8 +7,8 @@ Covers: ece() against a hand-computed 3-bin example plus perfectly-/anti-
 calibrated synthetic extremes; SigmoidCalibrator recovering a known planted
 (a, b) logistic distortion; IsotonicCalibrator's export() round-tripping
 through an independent, hand-written linear interpolation to prove the
-JS-port contract (Task 10) is trustworthy; and pick_calibration choosing
-the lower-ECE candidate.
+contract the JS port in docs/assets/walker.js relies on is trustworthy; and
+pick_calibration choosing the lower-ECE candidate.
 
 Nothing here touches data/raw/ or data/cleaned/ -- calibration operates on
 plain (y, p) arrays, synthetic or hand-built, so this whole file is
@@ -125,8 +125,8 @@ def _hand_written_interp(p, x, y):
 
     Deliberately not reusing numpy.interp (that's what IsotonicCalibrator
     itself uses internally) -- this proves the exported breakpoints alone
-    are enough to reproduce .predict(), the property Task 10's from-scratch
-    JS port depends on.
+    are enough to reproduce .predict(), the property the from-scratch JS
+    port in docs/assets/walker.js depends on.
     """
     x = list(x)
     y = list(y)

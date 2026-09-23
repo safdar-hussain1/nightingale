@@ -3,9 +3,8 @@
 # SPDX-License-Identifier: MIT
 """Shared pytest fixtures: guard tests that need real, already-fetched raw data.
 
-``data/raw/`` is gitignored — it's populated by running
-:func:`nightingale.fetch.fetch` (there is no ``nightingale fetch`` CLI yet; a
-later task adds one), not by cloning the repo. A handful of tests
+``data/raw/`` is gitignored — it's populated by running ``nightingale fetch``
+(:func:`nightingale.fetch.fetch`), not by cloning the repo. A handful of tests
 intentionally exercise the real raw data directly, or call :func:`clean`/
 :func:`fetch` and therefore need the raw files already cached on disk (the
 default test suite never touches the network, so it never fills an absent

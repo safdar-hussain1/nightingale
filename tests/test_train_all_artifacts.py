@@ -1,7 +1,7 @@
 # Nightingale — calibrated clinical risk models
 # Copyright (c) 2026 Safdar Hussain · https://github.com/safdar-hussain1/nightingale
 # SPDX-License-Identifier: MIT
-"""Well-formedness tests for the published Task 8 artifacts.
+"""Well-formedness tests for the artifacts ``scripts/train_all.py`` publishes.
 
 These tests read the COMMITTED ``models/<slug>/metrics.json`` and
 ``models/<slug>/oof_predictions.csv.gz`` files (and the figures under
@@ -14,16 +14,15 @@ point of this file is to check the ARTIFACTS actually shipped, not to
 reproduce them. This also means the file runs unmodified on a fresh clone
 (the artifacts are committed, unlike ``data/raw/``).
 
-Covers the well-formedness contract from the Task 8 brief: every metric is
+Covers the artifacts' well-formedness contract: every metric is
 a ``[point, lo, hi]`` triple with ``lo <= point <= hi``; every reliability
 bin's counts sum to ``n``; OOF row counts match
 ``Condition.n_rows``; conformal verdict fractions sum to 1.0; subgroup
 audit rows never report a numeric AUC for an "insufficient" group; and the
-figures exist as real, non-trivial PNGs. The final section pins the task
-brief's own published sanity gates (breast-cancer >= 0.95, diabetes in
-[0.75, 0.85], cervical-cancer's PR-AUC CI genuinely wide) as a regression
-guard against the real, already-run numbers -- not a target tuned after
-the fact.
+figures exist as real, non-trivial PNGs. The final section pins sanity
+gates set in advance (breast-cancer >= 0.95, diabetes in [0.75, 0.85],
+cervical-cancer's PR-AUC CI genuinely wide) as a regression guard against
+the real, already-run numbers -- not a target tuned after the fact.
 """
 
 import json
@@ -61,10 +60,10 @@ REQUIRED_TOP_LEVEL_KEYS = {
 
 FOUR_METRICS = ("roc_auc", "pr_auc", "brier", "ece")
 
-# Every subgroup dimension actually available per condition (Task 8 brief
-# §2): site is heart-disease-only (audit dimension, never a model
-# feature); sex exists for heart-disease/liver-disease/diabetes; age_band
-# exists everywhere except breast-cancer (WDBC has no age feature at all).
+# Every subgroup dimension actually available per condition: site is
+# heart-disease-only (audit dimension, never a model feature); sex exists
+# for heart-disease/liver-disease/diabetes; age_band exists everywhere
+# except breast-cancer (WDBC has no age feature at all).
 EXPECTED_SUBGROUP_DIMENSIONS = {
     "breast-cancer": set(),
     "cervical-cancer": {"age_band"},
@@ -339,11 +338,10 @@ def test_heart_disease_site_audit_covers_all_four_hospitals():
 
 
 # ---------------------------------------------------------------------------
-# Published sanity gates (Task 8 brief) -- pinned against the real,
-# already-run artifacts as a regression guard. These are read, not tuned:
-# the brief specifies the acceptance bars up front, and the run either
-# clears them or the brief requires reporting the miss honestly (which the
-# numbers file and task-8 report do for anything that doesn't clear).
+# Published sanity gates -- pinned against the real, already-run artifacts
+# as a regression guard. These are read, not tuned: the acceptance bars were
+# set before the run, so a run that misses one fails here instead of the
+# bar moving to meet it.
 # ---------------------------------------------------------------------------
 
 
@@ -357,7 +355,7 @@ def test_diabetes_roc_auc_is_within_the_brfss_literature_range():
 
 
 def test_cervical_cancer_pr_auc_is_reported_with_a_genuinely_wide_ci():
-    # The brief predicts LOW PR-AUC with a WIDE CI at 6.4% prevalence / 55
+    # Expect LOW PR-AUC with a WIDE CI at 6.4% prevalence / 55
     # positives -- this pins that the artifact reports that honestly
     # (interval actually wide) rather than silently narrowing it, without
     # asserting a specific point value the way the other two gates do.
@@ -368,8 +366,8 @@ def test_cervical_cancer_pr_auc_is_reported_with_a_genuinely_wide_ci():
 
 # ---------------------------------------------------------------------------
 # Pinned headline ROC-AUC point values. The three gates above bound
-# breast-cancer / diabetes / cervical-cancer against bars the brief set in
-# advance; these three pin the remaining conditions' published point estimate
+# breast-cancer / diabetes / cervical-cancer against bars set in advance;
+# these three pin the remaining conditions' published point estimate
 # to the exact value README.md and MODEL_CARD.md quote, so a silent drift in
 # training, cleaning, or the bootstrap seed turns the docs red instead of
 # leaving them quietly wrong. Values read from the committed metrics.json.

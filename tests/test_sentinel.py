@@ -10,8 +10,8 @@ fingerprint), and assert_calibrator_held_out (calibration/eval index overlap).
 The real-data tests at the bottom are the point of the module: they prove
 scan_sentinel_zeros flags `chol` on the raw Switzerland heart-disease file —
 the wild example that motivated writing this detector in the first place —
-and that the cleaner's sentinel-to-NaN conversion (Task 3) makes the flag go
-away, i.e. the cleaner and the detector agree.
+and that the cleaner's sentinel-to-NaN conversion (nightingale.clean) makes
+the flag go away, i.e. the cleaner and the detector agree.
 
 The raw-file test needs data/raw/ (gitignored, populated by `fetch`, not by
 cloning the repo) and is skipped with an actionable reason when it's absent
@@ -199,12 +199,12 @@ def test_raw_switzerland_chol_is_flagged():
 
 
 def test_cleaned_switzerland_chol_is_not_flagged():
-    # Proves the cleaner and the detector agree: Task 3's site-scoped
-    # chol == 0 -> NaN conversion for Switzerland/VA is exactly what makes
-    # this scan stop flagging chol on the cleaned data. Reads the committed
-    # data/cleaned/heart-disease.csv.gz artifact directly (rather than
-    # calling clean(), which would need data/raw/) so this test needs no
-    # raw data and always runs, including on a fresh clone.
+    # Proves the cleaner and the detector agree: nightingale.clean's
+    # site-scoped chol == 0 -> NaN conversion for Switzerland/VA is exactly
+    # what makes this scan stop flagging chol on the cleaned data. Reads the
+    # committed data/cleaned/heart-disease.csv.gz artifact directly (rather
+    # than calling clean(), which would need data/raw/) so this test needs
+    # no raw data and always runs, including on a fresh clone.
     cleaned_path = CLEANED_ROOT / "heart-disease.csv.gz"
     df = pd.read_csv(cleaned_path, compression="gzip")
     swiss = df[df["site"] == "switzerland"]

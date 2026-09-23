@@ -122,22 +122,23 @@ GZIP_BUDGET_BYTES = 300 * 1024
 
 _LEAF = -1  # `f` sentinel marking a leaf node in the flat node schema
 
-# Cache of fitted models, keyed by (slug, seed). Task 8 persisted only
-# metrics.json and oof_predictions.csv.gz -- no fitted estimator -- so an
-# export has to retrain. Training is seeded and reproducible (verified in
-# Task 8), so caching per process is a pure speed-up with no effect on
-# what is written.
+# Cache of fitted models, keyed by (slug, seed). scripts/train_all.py
+# persists only metrics.json and oof_predictions.csv.gz -- no fitted
+# estimator -- so an export has to retrain. Training is seeded and
+# reproducible (see the reproducibility note in scripts/train_all.py), so
+# caching per process is a pure speed-up with no effect on what is written.
 _TRAIN_CACHE: dict[tuple[str, int], TrainResult] = {}
 
 
 def train_result(slug: str, seed: int = 42) -> TrainResult:
     """``train_condition(slug, seed)``, memoised for the life of the process.
 
-    Task 8 wrote metrics and OOF predictions to ``models/<slug>/`` but not
-    the fitted estimator, so there is nothing on disk to load: the export
-    genuinely has to refit. ``train_condition`` is deterministic given the
-    seed, so memoising it changes only wall-clock -- a test module that
-    exports the same condition four times pays for one fit.
+    ``scripts/train_all.py`` writes metrics and OOF predictions to
+    ``models/<slug>/`` but not the fitted estimator, so there is nothing on
+    disk to load: the export genuinely has to refit. ``train_condition`` is
+    deterministic given the seed, so memoising it changes only wall-clock --
+    a test module that exports the same condition four times pays for one
+    fit.
     """
     key = (slug, seed)
     if key not in _TRAIN_CACHE:
@@ -727,14 +728,15 @@ def build_provenance() -> dict:
     """``built_utc`` / ``commit`` / ``author`` for the exported bundle.
 
     ``built_utc`` is the HEAD commit's committer timestamp, NOT the wall
-    clock. Task 11 signs everything under ``models/``, and Task 8 already
-    established that a signed artifact has to reproduce byte for byte on an
-    honest rerun or ``nightingale verify`` reports a false TAMPERED -- which
-    is why ``metrics.json`` carries no timestamp at all. ``model.json``'s
-    schema requires one, so it gets the one timestamp that is a property of
-    the source rather than of the run: re-exporting at the same commit
-    produces the same bytes, and the field still answers "how old is this
-    model" honestly.
+    clock. The signed provenance manifest (``nightingale sign``) covers
+    every ``model.json`` and ``metrics.json``, and ``scripts/train_all.py``
+    already established that a signed artifact has to reproduce byte for
+    byte on an honest rerun or ``nightingale verify`` reports a false
+    TAMPERED -- which is why ``metrics.json`` carries no timestamp at all.
+    ``model.json``'s schema requires one, so it gets the one timestamp that
+    is a property of the source rather than of the run: re-exporting at the
+    same commit produces the same bytes, and the field still answers "how
+    old is this model" honestly.
 
     The recorded commit is therefore the commit the model was built FROM,
     which is the parent of the commit that lands the model.json itself.

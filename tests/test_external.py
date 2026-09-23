@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 """Tests for the four-hospital external validation study (nightingale.external).
 
-Task 9's centrepiece: a model trained on Cleveland ONLY (303 rows) is scored,
+The study: a model trained on Cleveland ONLY (303 rows) is scored,
 naively and then with intercept-only recalibration, on the three sites it
 never saw (hungarian, switzerland, va). This file covers, in order:
 
@@ -14,19 +14,18 @@ never saw (hungarian, switzerland, va). This file covers, in order:
 3. _calibration_eval_split's 30/70 index arrays are disjoint for every site,
    and assert_calibrator_held_out (imported straight from nightingale.sentinel,
    not reimplemented) both passes on the real split and raises on a
-   deliberately corrupted one -- required test 2.
+   deliberately corrupted one.
 4. The AUC-invariance guarantee: intercept-only recalibration is a strictly
    monotone transform of p, so ROC-AUC before/after must be identical to
    ~1e-9 -- both a pure-synthetic version of this claim and a check against
-   the real transfer_study(seed=42) output -- required test 3.
+   the real transfer_study(seed=42) output.
 5. transfer_study(seed=42)'s live return value: all three target sites
-   present, Cleveland absent (required test 5), naive/recalibrated blocks
-   shaped correctly, and the whole call is deterministic across two runs.
+   present, Cleveland absent, naive/recalibrated blocks shaped correctly,
+   and the whole call is deterministic across two runs.
 6. The COMMITTED models/heart-disease/external.json artifact is well-formed
-   (required test 4) -- read directly from disk, mirroring
-   tests/test_train_all_artifacts.py's convention for the Task 8 artifacts,
-   so this file runs unmodified on a fresh clone once external.json is
-   committed.
+   -- read directly from disk, mirroring tests/test_train_all_artifacts.py's
+   convention for the scripts/train_all.py artifacts, so this file runs
+   unmodified on a fresh clone once external.json is committed.
 
 transfer_study(seed=42) trains one nested-CV model on 303 Cleveland rows --
 comparable wall-clock to a single train_condition("breast-cancer") call, not
@@ -92,7 +91,7 @@ def test_logit_clip_epsilon_is_documented_and_small():
 
 
 # ---------------------------------------------------------------------------
-# calibration_in_the_large: required test 1 (planted intercept)
+# calibration_in_the_large: planted intercept recovery
 # ---------------------------------------------------------------------------
 
 
@@ -174,14 +173,14 @@ def test_fit_intercept_only_near_zero_for_already_calibrated_p():
 
 
 # ---------------------------------------------------------------------------
-# AUC invariance under intercept-only recalibration (required test 3, pure)
+# AUC invariance under intercept-only recalibration (pure)
 # ---------------------------------------------------------------------------
 
 
 def test_intercept_only_recalibration_is_auc_invariant_synthetic():
     """A monotone transform of p can never change ROC-AUC (a rank statistic).
 
-    This is the pure-mechanism version of required test 3: fits an
+    This is the pure-mechanism version of the AUC-invariance check: fits an
     intercept on one synthetic sample, applies it, and checks ROC-AUC is
     unchanged to ~1e-9 with NO training pipeline involved -- isolating the
     claim from transfer_study's plumbing so a failure here always points at
@@ -217,7 +216,7 @@ def test_intercept_only_recalibration_changes_brier_when_shift_is_planted():
 
 
 # ---------------------------------------------------------------------------
-# _calibration_eval_split: disjointness (required test 2, pure)
+# _calibration_eval_split: disjointness (pure)
 # ---------------------------------------------------------------------------
 
 
@@ -266,9 +265,9 @@ def test_calibration_eval_split_is_seed_deterministic():
 
 
 def test_deliberately_overlapped_calibration_eval_indices_raise():
-    """The guard actually fires on a corrupted split -- required test 2's
-    second half ("assert the guard raises if you deliberately overlap
-    them"). Takes a REAL split from _calibration_eval_split and corrupts it
+    """The guard actually fires on a corrupted split -- the other half of
+    the disjointness check: deliberately overlapping the two index sets must
+    raise. Takes a REAL split from _calibration_eval_split and corrupts it
     by leaking one calibration row into the evaluation set, rather than
     using two arbitrary hand-written arrays -- so this is specifically
     exercising the leak this module's split could in principle produce.
@@ -299,7 +298,7 @@ def test_target_sites_constant_excludes_cleveland():
 
 
 def test_transfer_study_evaluates_exactly_the_three_non_cleveland_sites(transfer_result):
-    # Required test 5: Cleveland is trained on, never evaluated as a target.
+    # Cleveland is trained on, never evaluated as a target.
     assert set(transfer_result["sites"]) == {"hungarian", "switzerland", "va"}
     assert "cleveland" not in transfer_result["sites"]
 
@@ -328,7 +327,7 @@ def test_transfer_study_every_site_has_naive_and_recalibrated_blocks(transfer_re
 
 
 def test_transfer_study_naive_and_recalibrated_are_the_same_row_count(transfer_result):
-    """Fix round 1's core schema contract: "naive" and "recalibrated" are
+    """The core schema contract: "naive" and "recalibrated" are
     DIRECT siblings, both computed on the identical n_evaluation rows --
     never a whole-site count. This is what makes them a valid before/after
     comparison in the first place (see transfer_study's docstring for the
@@ -361,10 +360,10 @@ def test_transfer_study_calibration_in_the_large_present_for_naive_and_recalibra
 
 
 def test_transfer_study_recalibration_calibration_and_evaluation_rows_are_disjoint(monkeypatch):
-    """Integration-level version of required test 2: spies on the REAL guard
-    call inside transfer_study's own code path (not a hand-constructed
-    stand-in) and asserts disjointness directly on the captured index
-    arrays, once per target site.
+    """Integration-level version of the disjointness check: spies on the
+    REAL guard call inside transfer_study's own code path (not a
+    hand-constructed stand-in) and asserts disjointness directly on the
+    captured index arrays, once per target site.
     """
     import nightingale.external as external_module
 
@@ -390,7 +389,7 @@ def test_transfer_study_recalibration_calibration_and_evaluation_rows_are_disjoi
 
 
 def test_transfer_study_auc_identical_before_and_after_recalibration(transfer_result):
-    """Required test 3, against the ACTUAL PUBLISHED PATH (fix round 1):
+    """The AUC-invariance check, against the ACTUAL PUBLISHED PATH:
     compares site["naive"]["roc_auc"] directly against
     site["recalibrated"]["roc_auc"] -- the exact two top-level fields any
     real reader of transfer_study's output (or the committed external.json,
@@ -413,7 +412,7 @@ def test_transfer_study_is_deterministic_across_two_independent_calls():
     result_a = transfer_study(seed=42)
     result_b = transfer_study(seed=42)
 
-    # Byte-reproducible via JSON round-trip, matching Task 8's own
+    # Byte-reproducible via JSON round-trip, matching metrics.json's own
     # determinism discipline -- no wall-clock or unseeded randomness inside.
     assert json.dumps(result_a, sort_keys=True) == json.dumps(result_b, sort_keys=True)
 
@@ -439,13 +438,13 @@ def test_cleveland_training_block_is_present_and_well_formed(transfer_result):
 
 
 # ---------------------------------------------------------------------------
-# Committed models/heart-disease/external.json (required test 4)
+# Committed models/heart-disease/external.json
 # ---------------------------------------------------------------------------
 #
 # Reads the file straight off disk -- never calls transfer_study() -- so
 # this section runs on a fresh clone once external.json is committed, the
-# same convention tests/test_train_all_artifacts.py uses for Task 8's
-# artifacts.
+# same convention tests/test_train_all_artifacts.py uses for the
+# scripts/train_all.py artifacts.
 
 
 def _load_external_json() -> dict:
@@ -483,11 +482,12 @@ def test_external_json_site_has_naive_and_recalibrated_metric_triples(site):
 
 @pytest.mark.parametrize("site", ["hungarian", "switzerland", "va"])
 def test_external_json_auc_identical_before_and_after_recalibration(site):
-    """Required test 3 against the COMMITTED ARTIFACT, on the literal
-    top-level fields ("naive" vs "recalibrated") -- not a nested field a
-    reader would have to know to look for. This is the exact comparison
-    fix round 1 was about: it must be impossible to read this file and
-    compare the "obvious" two fields and get a wrong answer.
+    """The AUC-invariance check against the COMMITTED ARTIFACT, on the
+    literal top-level fields ("naive" vs "recalibrated") -- not a nested
+    field a reader would have to know to look for. This is the exact
+    comparison the schema is shaped around (see transfer_study's docstring):
+    it must be impossible to read this file and compare the "obvious" two
+    fields and get a wrong answer.
     """
     data = _load_external_json()
     block = data["sites"][site]
@@ -510,8 +510,8 @@ def test_external_json_naive_all_rows_is_the_whole_site_not_the_eval_subset(site
 
 
 def test_external_json_no_generated_utc_field_anywhere():
-    # Same reproducibility discipline as metrics.json (Task 8): no
-    # wall-clock timestamp baked into a byte-reproducible artifact.
+    # Same reproducibility discipline as metrics.json (scripts/train_all.py):
+    # no wall-clock timestamp baked into a byte-reproducible artifact.
     raw_text = EXTERNAL_JSON_PATH.read_text()
     assert "generated_utc" not in raw_text
 

@@ -5,9 +5,9 @@
 
 :func:`train_condition` is the public entry point. For one condition it
 runs an outer 5-fold stratified CV to produce out-of-fold (OOF) raw
-predictions (the pooled evaluation artifact every later published metric
-derives from -- Task 6+), refits a final model on all rows, and fits a
-probability calibrator on the pooled OOF predictions.
+predictions (the pooled evaluation artifact every published metric derives
+from -- see :mod:`nightingale.evaluate`), refits a final model on all rows,
+and fits a probability calibrator on the pooled OOF predictions.
 
 Protocol, exactly:
 
@@ -26,7 +26,7 @@ Protocol, exactly:
   columns filled 0) -- an eval-only category can never create a column,
   by construction, not by convention.
 - ``site`` (heart-disease's contributing-hospital column) is dropped: it is
-  provenance metadata, never a model feature (plan-review ruling).
+  provenance metadata, never a model feature.
 - diabetes only: the *inner* grid search subsamples each outer training
   fold to :data:`DIABETES_INNER_SUBSAMPLE_N` rows (stratified, seeded) to
   keep the 12-combo x 3-inner-fold search affordable at 253,680 rows; the
@@ -38,15 +38,15 @@ Protocol, exactly:
   never on ``final_model``'s own in-sample training predictions.
   :func:`_fit_deployment_calibrator` takes the OOF frame itself (not bare
   ``y``/``p_raw`` arrays) specifically so that substitution can't be made
-  by quietly swapping one argument at the call site -- a reviewer
-  confirmed exactly that swap (fit ``final_model`` first, then calibrate
-  on its own ``predict_proba``) went undetected by every other test in
-  this suite, because none of them asserted the calibrator's fitted
-  VALUES;
+  by quietly swapping one argument at the call site -- making exactly that
+  swap on purpose (fit ``final_model`` first, then calibrate on its own
+  ``predict_proba``) went undetected by every other test in this suite,
+  because none of them asserted the calibrator's fitted VALUES;
   ``tests/test_model.py::test_deployment_calibrator_matches_independent_oof_refit``
-  now does. This is the DEPLOYMENT calibrator: the artifact Task 10
-  exports for scoring genuinely new rows, where "fit on all the OOF signal
-  we have" is correct and desirable.
+  now does. This is the DEPLOYMENT calibrator: the artifact
+  :mod:`nightingale.export` writes into ``model.json`` for scoring
+  genuinely new rows, where "fit on all the OOF signal we have" is correct
+  and desirable.
 - ``oof["p_cal"]``, by contrast, is produced by CROSS-FITTED calibration
   (:func:`_cross_fit_calibration`): for each outer fold k, a fresh
   calibrator is fit on every OOF row NOT in fold k and applied only to fold
@@ -57,8 +57,8 @@ Protocol, exactly:
   reproduce its own training sample's empirical bin frequencies almost
   exactly, which is what made an earlier version of this module report a
   calibrated ECE of ~1e-16-1e-19: not a result, an artifact of scoring a
-  calibrator on its own training data. Every published metric (Task 6+)
-  MUST be computed from ``oof["p_cal"]``, never from re-scoring
+  calibrator on its own training data. Every published metric MUST be
+  computed from ``oof["p_cal"]``, never from re-scoring
   ``TrainResult.calibrator`` against the pooled OOF it was fit on.
   ``assert_calibrator_held_out`` is called live here too, once per
   cross-fit, on that fold's real held-out/scored index split.
@@ -93,7 +93,7 @@ GRID_LEARNING_RATE = (0.05, 0.1)
 _NON_FEATURE_COLUMNS = ("site",)
 
 DIABETES_SLUG = "diabetes"
-# For the inner grid search only (spec ruling): 253,680 rows x 12 combos x 3
+# For the inner grid search only: 253,680 rows x 12 combos x 3
 # inner folds is not worth the wall-clock; a 20k stratified seeded subsample
 # keeps the search affordable while the outer folds still see every row.
 DIABETES_INNER_SUBSAMPLE_N = 20_000
@@ -336,9 +336,9 @@ def _fit_deployment_calibrator(oof: pd.DataFrame) -> Calibrator:
     accident. A bare ``pick_calibration(y, p_raw)`` call at the
     ``train_condition`` call site could have ``p_raw`` swapped for
     ``final_model.predict_proba(X_all_enc)[:, 1]`` in a quiet one-line
-    edit -- confirmed by a reviewer, who made exactly that edit and found
-    the rest of the test suite (correctly) noticed nothing, because nothing
-    before that check asserted the calibrator's actual fitted VALUES.
+    edit -- and making exactly that edit on purpose showed the rest of the
+    test suite (correctly) noticed nothing, because nothing before that
+    check asserted the calibrator's actual fitted VALUES.
     Requiring the OOF DataFrame itself means reproducing that mutation
     needs a visibly fabricated stand-in DataFrame, not a one-token swap --
     and test_model.py's
@@ -423,8 +423,9 @@ def train_condition(slug: str, seed: int = 42) -> TrainResult:
 
     # Deployment calibrator: fit once on the pooled OOF p_raw -- never on
     # final_model's own (in-sample, below) training predictions. This is
-    # the artifact TrainResult.calibrator exports for scoring genuinely new
-    # rows (Task 10); it is NOT what oof["p_cal"] is computed from below.
+    # the artifact TrainResult.calibrator exports (via nightingale.export)
+    # for scoring genuinely new rows; it is NOT what oof["p_cal"] is
+    # computed from below.
     # _fit_deployment_calibrator's signature (takes `oof`, not bare arrays)
     # is deliberately shaped so this line can't be quietly rewired to
     # final_model's in-sample predictions -- see its docstring.

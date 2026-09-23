@@ -300,11 +300,11 @@ def _validate(slug: str, df: pd.DataFrame) -> None:
 # gzip embeds a Unix mtime in its header by default, which makes
 # `df.to_csv(..., compression="gzip")` produce a different file on every
 # call even when the DataFrame content is byte-for-byte identical. That
-# breaks Task 11's Ed25519 provenance manifest, which must report an
-# untouched, correctly-regenerated repo as OK rather than TAMPERED. Pinning
-# mtime=0 makes the gzip container itself deterministic: two writes of the
-# same DataFrame produce the same file, not just the same decompressed
-# content.
+# breaks the signed Ed25519 provenance manifest (`nightingale verify`),
+# which must report an untouched, correctly-regenerated repo as OK rather
+# than TAMPERED. Pinning mtime=0 makes the gzip container itself
+# deterministic: two writes of the same DataFrame produce the same file, not
+# just the same decompressed content.
 _GZIP_COMPRESSION = {"method": "gzip", "mtime": 0}
 
 

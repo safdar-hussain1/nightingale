@@ -9,8 +9,8 @@ Two separate claims, two separate mechanisms:
    since it was signed -- a SHA-256 per artifact, Ed25519 over the sorted
    set of hashes. ``verify`` recomputes every hash from disk and checks the
    signature; it never regenerates an artifact to compare against, because
-   Task 10 established that regeneration is not byte-reproducible across
-   commits.
+   regeneration is not byte-reproducible across commits (a bundle's
+   ``provenance.built_utc`` is the HEAD commit's timestamp).
 2. **The fingerprint** proves a lone ``model.json`` -- found anywhere, under
    any name, with its ``provenance`` block stripped -- is a copy of one of
    this project's six trees. For each registered condition it runs THAT
@@ -238,7 +238,7 @@ def test_sign_manifest_reads_key_path_from_env(tmp_path, monkeypatch):
 
 
 # --------------------------------------------------------------------------
-# I1: path handling -- signature checked before any hashing, and every
+# Path handling -- signature checked before any hashing, and every
 # relpath must resolve under repo_root even when the signature is valid.
 # --------------------------------------------------------------------------
 
@@ -291,7 +291,7 @@ def test_verify_never_hashes_anything_when_signature_invalid(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# I2: fail closed on malformed signature material.
+# Fail closed on malformed signature material.
 # --------------------------------------------------------------------------
 
 
@@ -326,7 +326,7 @@ def test_verify_missing_signature_key_is_invalid_not_a_crash(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# I3: editing the manifest's own content -- an artifact hash, or meta --
+# Editing the manifest's own content -- an artifact hash, or meta --
 # must invalidate the signature. This is the exact attack signing exists
 # to catch.
 # --------------------------------------------------------------------------
@@ -375,8 +375,7 @@ def test_verify_edited_meta_invalidates_signature(tmp_path):
 # tmp_path tree, so none of them ever check that the actual, committed
 # provenance/manifest.json currently validates against the actual,
 # committed models/ tree it claims to cover. Tampering with a real,
-# committed artifact would be invisible without this test (mutation sweep
-# task 17, gap 2).
+# committed artifact would be invisible without this test.
 # --------------------------------------------------------------------------
 
 

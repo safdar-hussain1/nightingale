@@ -121,7 +121,7 @@ def test_conformal_coverage_guarantee_on_synthetic_classification():
     # (Vovk 2012), so some spread around 0.90 is expected sampling noise,
     # not a defect.
     #
-    # Empirical basis for the band (fix round 1, code review): this exact
+    # Empirical basis for the band: this exact
     # experiment (this random_state=0 split pipeline, alpha=0.1) was
     # rerun across 130 different seeds. The pinned seed above (0) is safe
     # (measured coverage 0.9133) and mean coverage across all 130 seeds

@@ -10,10 +10,10 @@ every committed artifact (the six model bundles, the cleaned datasets, the
 report figures, the dashboard) with SHA-256, and :func:`sign_manifest` signs
 the sorted set of hashes with Ed25519. :func:`verify` recomputes every hash
 from the files actually on disk and checks the signature; it never
-regenerates an artifact to compare against, because Task 10 established that
-``export_model`` is not byte-reproducible across commits (``provenance.
-built_utc`` is the HEAD committer timestamp, so a rerun after any later
-commit writes different bytes). Hashing what is really there is therefore
+regenerates an artifact to compare against, because ``export_model`` is not
+byte-reproducible across commits (``provenance.built_utc`` is the HEAD
+committer timestamp, so a rerun after any later commit writes different
+bytes). Hashing what is really there is therefore
 the only sound check -- a tampered byte anywhere is caught, and an honest
 checkout at any later commit still verifies, because the manifest pins the
 bytes it was signed against, not a recipe for reproducing them.
@@ -85,10 +85,10 @@ from nightingale.export import AUTHOR, REPO_ROOT, predict
 # --------------------------------------------------------------------------
 
 # Globs relative to the repo root. An artifact is included iff it EXISTS at
-# signing time -- absent globs (docs/index.html before the dashboard task,
-# reports/figures/* before the first report run) simply contribute nothing;
-# their later appearance is handled by re-signing, not by this module
-# guessing at files that don't exist yet.
+# signing time -- absent globs (docs/index.html before the dashboard is first
+# built, reports/figures/* before the first report run) simply contribute
+# nothing; their later appearance is handled by re-signing, not by this
+# module guessing at files that don't exist yet.
 ARTIFACT_GLOBS: tuple[str, ...] = (
     "models/*/model.json",
     "models/*/metrics.json",
@@ -109,8 +109,9 @@ DEFAULT_PUBKEY_PATH = REPO_ROOT / PUBKEY_RELPATH
 # The maximum abs difference between two p_raw vectors that still counts as
 # a match. Two walkers built to match each other (this module reuses
 # nightingale.export.predict directly, so it is really the SAME walker) hold
-# to float64 rounding, which is far tighter than this -- 1e-12 is the bar
-# the brief sets, not a measured slack.
+# to float64 rounding, which is far tighter than this -- 1e-12 is a fixed
+# bar (the same one nightingale.export.CANARY_TOLERANCE sets), not a
+# measured slack.
 FINGERPRINT_TOLERANCE = 1e-12
 
 
@@ -307,9 +308,9 @@ def verify(
     check, since a manifest is a list of relative paths INTO the checkout,
     never an instruction to read arbitrary locations.
 
-    Hashes are always taken from the files ON DISK -- never regenerated --
-    per the Task 10 coordination note: a fresh export after any later commit
-    would legitimately produce different bytes and must not read as
+    Hashes are always taken from the files ON DISK -- never regenerated: a
+    fresh export after any later commit would legitimately produce different
+    bytes (``provenance.built_utc`` moves with HEAD) and must not read as
     tampering.
     """
     repo_root = Path(repo_root).resolve()

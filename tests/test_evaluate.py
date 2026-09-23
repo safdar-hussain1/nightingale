@@ -128,7 +128,7 @@ def test_net_benefit_treat_none_zero_and_treat_all_matches_closed_form():
 
 
 # ---------------------------------------------------------------------------
-# net_benefit: threshold-domain guard (fix round 1, finding 1)
+# net_benefit: threshold-domain guard
 # ---------------------------------------------------------------------------
 
 
@@ -249,7 +249,7 @@ def test_evaluate_oof_breast_cancer_real_condition():
 
 
 # ---------------------------------------------------------------------------
-# evaluate_oof: distinct per-metric bootstrap seed (fix round 1, finding 3)
+# evaluate_oof: distinct per-metric bootstrap seed
 # ---------------------------------------------------------------------------
 
 
