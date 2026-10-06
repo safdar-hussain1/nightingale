@@ -7,10 +7,13 @@
 The dashboard is a single self-contained ``docs/index.html`` assembled by
 ``scripts/build_dashboard.py`` from committed, signed artifacts. Every test
 here guards one property that a human reviewer cannot re-check by eye on a
-1.5 MB file: that no placeholder survived, that the inlined inference engine
-is byte-identical to the one the parity test exercises, that the page carries
-its own disclaimer verbatim, that the build is reproducible, and that the
-committed file is the one the current artifacts produce.
+file this size: that no placeholder survived, that the inlined inference
+engine is byte-identical to the one the parity test exercises, that the form
+writes every answer into the column the model expects, that the example
+records are the signed rows they claim to be, that the page carries its own
+disclaimer verbatim and loads nothing from elsewhere, that the build is
+reproducible, and that the committed file is the one the current artifacts
+produce.
 """
 
 from __future__ import annotations
@@ -55,6 +58,8 @@ HONESTY_BANNER = (
 
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 
+FONTS_PLACEHOLDER = "/*__FONTS__*/"
+
 
 def _load_builder():
     """Import the build script by path (``scripts/`` is not a package)."""
@@ -83,7 +88,9 @@ def html(builder) -> str:
 
 
 def test_template_carries_exactly_one_placeholder():
-    assert TEMPLATE.read_text(encoding="utf-8").count("/*__DATA__*/") == 1
+    template = TEMPLATE.read_text(encoding="utf-8")
+    for placeholder in ("/*__DATA__*/", "/*__WALKER__*/", FONTS_PLACEHOLDER):
+        assert template.count(placeholder) == 1, placeholder
 
 
 def test_no_placeholder_survives_the_build(html):
@@ -256,27 +263,180 @@ def test_blank_state_names_missing_branch_routing(html):
 
 
 # --------------------------------------------------------------------------
+# The form and the example records
+#
+# The page asks questions, not model columns, and then maps every answer back
+# onto the exact feature vector the model was trained on. A question that
+# skipped a column, or two that wrote the same one, would score a different
+# patient from the one on screen while looking right, so the mapping is
+# checked against the exported schema, and the example records against the
+# signed data they claim to come from.
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def payload(builder):
+    return builder.build_payload()
+
+
+def _conditions(payload):
+    return {condition["slug"]: condition for condition in payload["conditions"]}
+
+
+def test_every_condition_has_words_for_the_form(builder):
+    assert set(builder.PRESENTATION) == set(SLUGS)
+    orders = sorted(entry["order"] for entry in builder.PRESENTATION.values())
+    assert orders == list(range(1, len(SLUGS) + 1))
+
+
+def test_every_model_input_is_asked_exactly_once_or_omitted(payload):
+    for slug, condition in _conditions(payload).items():
+        features = condition["features"]
+        asked = [index for q in condition["ui"]["questions"] for index in q["features"]]
+        assert len(asked) == len(set(asked)), f"{slug}: a column is written by two questions"
+        constant = {index for index, feature in enumerate(features) if feature["constant"]}
+        assert set(asked) | constant == set(range(len(features))), f"{slug}: a column is never asked"
+        assert not set(asked) & constant, f"{slug}: a constant column is asked"
+        assert len(condition["ui"]["omitted"]) == len(constant)
+        grouped = [key for group in condition["ui"]["groups"] for key in group["keys"]]
+        assert sorted(grouped) == sorted(q["key"] for q in condition["ui"]["questions"])
+
+
+def test_no_tree_splits_on_an_omitted_column(payload):
+    """Omitted columns are left blank; that is only safe if no tree reads them."""
+    for slug, condition in _conditions(payload).items():
+        constant = {index for index, feature in enumerate(condition["features"]) if feature["constant"]}
+        used = {node["f"] for tree in condition["model"]["trees"] for node in tree}
+        assert not used & constant, f"{slug}: a tree splits on a column the form never asks"
+
+
+def test_choices_are_the_columns_own_codes(payload):
+    """Every coded option is a value the column really takes in the data."""
+    import pandas as pd
+
+    for slug, condition in _conditions(payload).items():
+        cleaned = pd.read_csv(REPO_ROOT / "data" / "cleaned" / f"{slug}.csv.gz")
+        for q in condition["ui"]["questions"]:
+            if q["kind"] not in ("choice", "yesno"):
+                continue
+            name = condition["features"][q["features"][0]]["name"]
+            observed = set(cleaned[name].dropna().round(6))
+            offered = {round(float(option["value"]), 6) for option in q["options"]}
+            assert observed <= offered, f"{slug}.{name}: data values {observed - offered} have no option"
+
+
+def test_typical_answers_are_answers(payload):
+    for slug, condition in _conditions(payload).items():
+        for q in condition["ui"]["questions"]:
+            typical = q["typical"]
+            if q["kind"] == "number":
+                assert q["min"] <= typical <= q["max"], f"{slug}.{q['key']}"
+            elif q["kind"] == "onehot":
+                assert typical in q["features"], f"{slug}.{q['key']}"
+            else:
+                assert typical in [option["value"] for option in q["options"]], f"{slug}.{q['key']}"
+
+
+def test_examples_are_real_records_with_their_real_outcome(payload):
+    import pandas as pd
+
+    from nightingale.export import encoded_frame
+
+    for slug, condition in _conditions(payload).items():
+        examples = condition["ui"]["examples"]
+        kinds = [example["kind"] for example in examples]
+        assert kinds[:2] == ["had", "had_not"], f"{slug}: {kinds}"
+        encoded = encoded_frame(slug)
+        target = pd.read_csv(REPO_ROOT / "data" / "cleaned" / f"{slug}.csv.gz")["target"]
+        for example in examples:
+            position = example["row"] - 1
+            assert example["outcome"] == int(target.iloc[position])
+            expected = []
+            for value in encoded.iloc[position].tolist():
+                if isinstance(value, bool):
+                    expected.append(1.0 if value else 0.0)
+                elif value != value:
+                    expected.append(None)
+                else:
+                    expected.append(float(value))
+            assert example["values"] == expected, f"{slug} record {example['row']} is not the signed row"
+        assert examples[0]["outcome"] == 1 and examples[1]["outcome"] == 0
+
+
+def test_close_calls_really_are_close_calls(payload):
+    from nightingale.export import predict
+
+    for slug, condition in _conditions(payload).items():
+        model = condition["model"]
+        for example in condition["ui"]["examples"]:
+            if example["kind"] == "close_call":
+                assert model["conformal"]["q_hat"] >= 0.5
+                assert predict(model, example["values"])["set"] == "uncertain", slug
+
+
+def test_the_form_scores_an_example_exactly_as_its_record(payload):
+    """Loading an example through the form must not change what is scored.
+
+    The page writes the omitted columns as blank rather than as the record's
+    own value; this proves that cannot move a prediction, by scoring both.
+    """
+    from nightingale.export import predict
+
+    for slug, condition in _conditions(payload).items():
+        model = condition["model"]
+        constant = {index for index, feature in enumerate(condition["features"]) if feature["constant"]}
+        for example in condition["ui"]["examples"]:
+            as_form = [None if index in constant else value for index, value in enumerate(example["values"])]
+            assert predict(model, as_form) == predict(model, example["values"]), slug
+
+
+def test_labels_are_the_data_dictionarys(payload, builder):
+    """Plain labels come from data/DATA_DICTIONARY.md, not raw column names."""
+    dictionary = builder.dictionary_entries()
+    for slug, condition in _conditions(payload).items():
+        overrides = builder.PRESENTATION[slug]["labels"]
+        for q in condition["ui"]["questions"]:
+            if q["kind"] == "onehot" or q["key"] in overrides:
+                continue
+            entry = dictionary[slug][q["key"]]["label"]
+            assert entry.startswith(q["label"]), f"{slug}.{q['key']}: {q['label']!r} vs {entry!r}"
+
+
+# --------------------------------------------------------------------------
 # How the page loads
 # --------------------------------------------------------------------------
 
 
-def test_chartjs_is_pinned_with_subresource_integrity(html):
-    match = re.search(r"<script[^>]*chart[^>]*></script>", html, re.IGNORECASE)
-    assert match is not None, "no Chart.js script tag"
-    tag = match.group(0)
-    assert "integrity=" in tag
-    assert "crossorigin=" in tag
-    assert re.search(r"chart\.js@\d+\.\d+\.\d+", tag), "Chart.js is not version-pinned"
+def test_page_loads_nothing_remote(html):
+    """Every byte the page needs is inside it, so it works from ``file://``.
 
-
-def test_chartjs_is_the_only_remote_subresource(html):
-    """Everything but Chart.js is inline, so the page works from ``file://``."""
-    # rel="canonical" is crawler metadata, never fetched — drop it before the
-    # scan so only tags that actually pull bytes are held to the rule.
+    Scripts, styles, fonts and images are all inline. What remains are links
+    a visitor chooses to follow (the repository, the author) and crawler
+    metadata that is never fetched by the page itself.
+    """
+    # rel="canonical" and the Open Graph / Twitter tags are crawler metadata,
+    # never fetched -- drop them before the scan so only tags that actually
+    # pull bytes are held to the rule.
     scannable = re.sub(r'<link rel="canonical"[^>]*>', "", html)
-    remote = re.findall(r'(?:src|href)="(https?://[^"]+)"', scannable)
-    subresources = [url for url in remote if not url.startswith("https://github.com")]
-    assert all("chart.js" in url for url in subresources), subresources
+    scannable = re.sub(r"<meta [^>]*>", "", scannable)
+    scannable = re.sub(r'<script type="application/ld\+json">.*?</script>', "", scannable, flags=re.S)
+    assert not re.search(r"<script[^>]+src=", scannable), "a script is loaded from elsewhere"
+    assert not re.search(r"<link[^>]+stylesheet", scannable), "a stylesheet is loaded from elsewhere"
+    assert not re.search(r"@import", scannable), "a stylesheet is imported from elsewhere"
+    assert not re.search(r"url\(\s*['\"]?https?:", scannable), "a style pulls a remote url()"
+    remote = re.findall(r'src="(https?://[^"]+)"', scannable)
+    assert remote == [], remote
+    links = re.findall(r'href="(https?://[^"]+)"', scannable)
+    assert all(link.startswith("https://github.com/") for link in links), links
+
+
+def test_both_typefaces_are_inlined(html, builder):
+    assert FONTS_PLACEHOLDER not in html
+    assert html.count("@font-face{") == len(builder.FONT_FACES)
+    assert html.count("src:url(data:font/woff2;base64,") == len(builder.FONT_FACES)
+    for family, filename, _ in builder.FONT_FACES:
+        assert f"font-family:'{family}'" in html
+        assert (REPO_ROOT / "scripts" / "fonts" / filename).is_file()
 
 
 def test_page_never_fetches_at_runtime(html):

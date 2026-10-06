@@ -29,3 +29,9 @@ its provenance metadata removed — by running each condition's own reference
 canary inputs through both the reference's trees and the candidate's trees
 and comparing the pre-calibration outputs, rather than trusting anything
 the candidate file supplies about itself.
+
+The dashboard embeds two typefaces, each under the SIL Open Font License 1.1,
+with the full licence text beside the font files in scripts/fonts/:
+
+  Instrument Serif — Copyright 2022 The Instrument Serif Project Authors
+  Figtree — Copyright 2022 The Figtree Project Authors

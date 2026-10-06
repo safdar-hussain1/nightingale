@@ -6,9 +6,12 @@ Calibrated screening-triage risk models for six clinical conditions, built so
 every published number arrives with its uncertainty attached — and so the
 model you read about is provably the model that runs.
 
-**[Live dashboard](https://safdar-hussain1.github.io/nightingale/)** — all six
-models run entirely in the visitor's browser, from the same exported bundles
-this repository ships.
+**[Live dashboard](https://safdar-hussain1.github.io/nightingale/)** — pick a
+condition, load a real patient record or type in your own numbers, and get a
+calibrated risk, a verdict that can say "too close to call", and a rose whose
+petals are the answers that drove it. All six models run entirely in the
+visitor's browser, from the same exported bundles this repository ships; a
+second view on the same page holds every measurement with its interval.
 
 ![dashboard](reports/figures/dashboard.png)
 
@@ -334,8 +337,8 @@ re-sign. Everything else works from a plain checkout.
 ### View the dashboard locally
 
 `docs/index.html` is self-contained — the six model bundles, the walker, the
-figures and the styles are all inlined, and the page never calls `fetch()` at
-runtime. So the file scheme is enough:
+example records, the charts, the styles and the fonts are all inlined, and the
+page never calls `fetch()` at runtime. So the file scheme is enough:
 
 ```bash
 open docs/index.html                # macOS
@@ -353,12 +356,12 @@ python3 -m http.server 8000 --directory docs
 ```
 
 ```
-HTTP 200  723054 bytes  text/html
+HTTP 200  855644 bytes  text/html
 ```
 
 Then open `http://localhost:8000`. Append `?selftest=1` to either scheme to
 make the page re-score its own canaries and report the result in the tab
-title; `?theme=dark` and `?theme=light` pin the plate.
+title; `?theme=dark` and `?theme=light` pin the theme.
 
 ### Before you demo it
 
@@ -446,8 +449,8 @@ close, so no model was traded down for size:
 | kidney-disease | 100 | 638 | 43,267 B | 7,220 B | 2.4% |
 | liver-disease | 100 | 620 | 38,911 B | 6,720 B | 2.2% |
 
-All six together are 76,528 B gzipped. The whole dashboard, models inlined, is
-718,166 B (143,052 B gzipped) in a single self-contained file.
+All six together are 76,528 B gzipped. The whole dashboard, models and fonts
+inlined, is 855,644 B (205,550 B gzipped) in a single self-contained file.
 
 ## Provenance — it's signed
 
@@ -473,10 +476,10 @@ the SHA-256 of the raw 32-byte key — is
 49e4e52d6015eb7398cc04b0fd8fcb8fc5a82cd3a501836af55bb15518bd17a8
 ```
 
-and it is printed in the dashboard footer beside the `openssl` pipe that
-recomputes it. Compare it out-of-band before trusting a checkout: a copy
-re-signed by someone else, with their key committed in place of this one, will
-verify happily against itself.
+and it is printed on the dashboard's Measurements view beside the `openssl`
+pipe that recomputes it. Compare it out-of-band before trusting a checkout: a
+copy re-signed by someone else, with their key committed in place of this one,
+will verify happily against itself.
 
 Signature aside, every `models/<slug>/model.json` carries a canary block —
 deterministic inputs plus the probability this project's own code gives them.
@@ -527,6 +530,7 @@ scripts/
   external_study.py       # the published transfer study
   build_dashboard.py      # bakes models + data into a single-file dashboard
   dashboard_template.html
+  fonts/                  # the page's two typefaces and their licences, inlined at build time
 data/
   cleaned/*.csv.gz        # six cleaned datasets (committed, signed)
   DATA_DICTIONARY.md      # every feature: type, unit, range, missingness
@@ -576,10 +580,10 @@ every cleaning decision — is in
 
 Python, pandas, NumPy, scikit-learn, XGBoost, Matplotlib, `cryptography` for
 Ed25519, Jupyter for the notebooks. The dashboard is one
-self-contained HTML file: no framework, no build step, no ML runtime — plain
-JavaScript walking the exported trees, with Chart.js (pinned by SRI hash) used
-only for two cartesian plots and a hand-written SVG renderer standing in when it
-cannot be reached.
+self-contained HTML file: no framework, no build step, no ML runtime and no
+network request — plain JavaScript walking the exported trees, hand-drawn SVG
+for every chart, and two typefaces (Instrument Serif and Figtree, SIL Open Font
+License) inlined at build time.
 
 Every number in this README, the model card and the data dictionary was
 produced with:
