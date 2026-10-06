@@ -356,7 +356,7 @@ python3 -m http.server 8000 --directory docs
 ```
 
 ```
-HTTP 200  855644 bytes  text/html
+HTTP 200  885046 bytes  text/html
 ```
 
 Then open `http://localhost:8000`. Append `?selftest=1` to either scheme to
@@ -450,7 +450,7 @@ close, so no model was traded down for size:
 | liver-disease | 100 | 620 | 38,911 B | 6,720 B | 2.2% |
 
 All six together are 76,528 B gzipped. The whole dashboard, models and fonts
-inlined, is 855,644 B (205,550 B gzipped) in a single self-contained file.
+inlined, is 885,046 B (213,272 B gzipped) in a single self-contained file.
 
 ## Provenance — it's signed
 
