@@ -19,13 +19,13 @@
 <meta property="og:image" content="https://safdar-hussain1.github.io/nightingale/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Nightingale: a heart-disease risk worked out in the browser, drawn as a rose whose petals are the measurements that moved it, with the verdict beside it.">
+<meta property="og:image:alt" content="Nightingale: every light is a real patient, placed nearer the centre the higher the heart-disease risk a model gave them; rose lights had the disease, blue lights did not.">
 
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Nightingale — Disease Risk Prediction in Your Browser">
 <meta name="twitter:description" content="Six calibrated risk models for heart, kidney and liver disease, diabetes, and breast and cervical cancer. They run in your browser and show their uncertainty.">
 <meta name="twitter:image" content="https://safdar-hussain1.github.io/nightingale/og-image.png">
-<meta name="twitter:image:alt" content="Nightingale: a heart-disease risk worked out in the browser, drawn as a rose whose petals are the measurements that moved it, with the verdict beside it.">
+<meta name="twitter:image:alt" content="Nightingale: every light is a real patient, placed nearer the centre the higher the heart-disease risk a model gave them; rose lights had the disease, blue lights did not.">
 
 <script type="application/ld+json">
 {
@@ -77,6 +77,7 @@
 // stamped on <html>; with no explicit choice nothing is stamped and the CSS
 // prefers-color-scheme block governs, which is the honest default.
 (function () {
+  document.documentElement.classList.add('js');
   try {
     var query = new URLSearchParams(location.search).get('theme');
     var stored = null;
@@ -315,15 +316,50 @@ svg { display: block; }
 .icon-button svg { width: 18px; height: 18px; }
 
 /* ------------------------------------------------------------ hero */
-.hero { padding: clamp(26px, 3.4vw, 44px) 0 clamp(64px, 9vw, 120px); }
-.hero-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 16px 40px; }
+.hero { position: relative; min-height: calc(100svh - 64px); display: flex; align-items: center; padding: 28px 0 88px; }
+.hero-grid { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 20px 40px; align-items: center; width: 100%; }
 .hero h1 {
-  grid-column: 1 / -1; margin: 0; max-width: 40ch;
-  font: 400 clamp(2.3rem, 4vw, 3.55rem)/1.0 var(--serif); letter-spacing: -0.016em;
+  margin: 0; max-width: 15ch;
+  font: 400 clamp(2.7rem, 5.3vw, 5.1rem)/0.96 var(--serif); letter-spacing: -0.02em;
   text-wrap: balance;
 }
-.lede { margin: 0; max-width: 66ch; font-size: 1.04rem; line-height: 1.6; color: var(--ink-2); }
-.hero-ctas { display: flex; flex-wrap: wrap; gap: 10px; }
+.lede { margin: 22px 0 0; max-width: 46ch; font-size: 1.08rem; line-height: 1.62; color: var(--ink-2); }
+.hero-ctas { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+.sky-picker { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 30px; max-width: 520px; }
+.sky-pick {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px 7px 10px; border-radius: 999px;
+  border: 1px solid var(--line-2); background: transparent; color: var(--ink-2); font-size: 0.82rem; font-weight: 650;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.sky-pick svg { width: 16px; height: 16px; }
+.sky-pick:hover { color: var(--ink); border-color: var(--ink-3); }
+.sky-pick[aria-pressed="true"] { background: var(--btn); color: var(--btn-ink); border-color: transparent; }
+.sky { position: relative; margin: 0; justify-self: center; width: min(100%, 76vh, 720px); }
+.sky canvas { display: block; width: 100%; aspect-ratio: 1; cursor: crosshair; }
+.sky-tip {
+  position: absolute; z-index: 3; pointer-events: none; padding: 7px 11px; border-radius: 10px;
+  background: var(--btn); color: var(--btn-ink); font-size: 0.8rem; font-weight: 650; white-space: nowrap;
+  transform: translate(-50%, calc(-100% - 12px)); box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.55);
+}
+.sky-caption { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; margin-top: 6px; font-size: 0.8rem; color: var(--ink-2); }
+.sky-caption span { display: inline-flex; align-items: center; gap: 7px; }
+.sky-caption i { width: 9px; height: 9px; border-radius: 50%; }
+.sky-caption i.up { background: var(--rose); box-shadow: 0 0 10px var(--rose); }
+.sky-caption i.down { background: var(--blue); box-shadow: 0 0 10px var(--blue); }
+.sky-caption .count { color: var(--ink-3); }
+.scroll-cue {
+  position: absolute; left: 50%; bottom: 22px; width: 26px; height: 42px; margin-left: -13px; border-radius: 14px;
+  border: 1.5px solid var(--line-2);
+}
+.scroll-cue span { position: absolute; left: 50%; top: 9px; width: 4px; height: 8px; margin-left: -2px; border-radius: 2px; background: var(--ink-2); animation: cue 2.2s var(--ease) infinite; }
+@keyframes cue { 0% { opacity: 0; transform: translateY(-4px); } 30% { opacity: 1; } 80%, 100% { opacity: 0; transform: translateY(14px); } }
+
+/* the second chapter: one patient */
+.section.meet { padding-top: clamp(40px, 6vw, 72px); }
+
+/* headings and groups rise into view once; the class is only set when scripts run */
+.js .reveal { opacity: 0; transform: translateY(28px); filter: blur(8px); transition: opacity 0.9s var(--ease), transform 0.9s var(--ease), filter 0.9s var(--ease); }
+.js .reveal.in { opacity: 1; transform: none; filter: none; }
 .cta {
   display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px;
   font-weight: 700; font-size: 0.92rem; text-decoration: none;
@@ -384,7 +420,7 @@ svg { display: block; }
 /* patient card */
 .patient-head { padding: 18px 18px 12px; border-bottom: 1px solid var(--line); }
 .patient-title { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.patient-title h2 { margin: 0; font: 400 1.55rem/1 var(--serif); }
+.patient-title h3 { margin: 0; font: 400 1.55rem/1 var(--serif); }
 .patient-title span { font-size: 0.78rem; color: var(--ink-3); font-weight: 600; white-space: nowrap; }
 .cond-intro { margin: 8px 0 0; font-size: 0.84rem; line-height: 1.5; color: var(--ink-2); }
 .records { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
@@ -482,7 +518,7 @@ svg { display: block; }
 .instrument[data-set="positive"] { --halo: var(--rose-wash); }
 .instrument[data-set="negative"] { --halo: var(--blue-wash); }
 .instrument[data-set="uncertain"] { --halo: var(--gold-wash); }
-.rose-wrap { position: relative; width: min(100%, 460px, 56vh); min-width: 260px; aspect-ratio: 1; }
+.rose-wrap { position: relative; width: min(100%, 500px, 62vh); min-width: 260px; aspect-ratio: 1; transition: transform 0.6s var(--ease); will-change: transform; }
 .rose-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .rose-svg .petal { transition: opacity 0.25s; cursor: pointer; }
 .rose-svg .glow { filter: url(#rose-blur); opacity: calc(0.6 * var(--glow-strength)); pointer-events: none; }
@@ -656,25 +692,27 @@ svg { display: block; }
 .privacy svg { flex: none; width: 20px; height: 20px; color: var(--ink-2); margin-top: 1px; }
 .privacy p { margin: 0; }
 
-/* accuracy */
-.acc { margin-top: 40px; max-width: 980px; }
-.acc-axis, .acc-row { display: grid; grid-template-columns: 210px minmax(0, 1fr) 84px; gap: 18px; align-items: center; }
-.acc-axis { color: var(--ink-3); font-size: 0.76rem; }
-.acc-axis .ticks { position: relative; height: 26px; }
-.acc-axis .ticks span { position: absolute; bottom: 4px; transform: translateX(-50%); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.acc-axis .ticks span.edge-l { transform: none; }
-.acc-axis .ticks span.edge-r { transform: translateX(-100%); }
-.acc-row { position: relative; padding: 6px 0; border-top: 1px solid var(--line); }
-.acc-row:hover { background: linear-gradient(90deg, transparent, var(--grey-wash), transparent); }
-.acc-name { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 0.98rem; min-width: 0; }
-.acc-name svg { flex: none; width: 20px; height: 20px; color: var(--ink-2); }
-.track { position: relative; height: 48px; }
-.track .grid { position: absolute; top: 10px; bottom: 10px; width: 1px; background: var(--line); }
-.track .fill { position: absolute; left: 0; top: 50%; height: 10px; margin-top: -5px; border-radius: 999px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink) 30%, transparent)); transform-origin: left; transition: transform 1s var(--ease); }
-.track .ci { position: absolute; top: 50%; height: 10px; margin-top: -5px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 30%, transparent); }
-.track .pt { position: absolute; top: 50%; width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; background: var(--ink); border: 4px solid var(--bg); box-shadow: 0 0 18px rgba(255, 190, 120, calc(0.5 * var(--glow-strength))); }
-.acc-val { text-align: right; font: 750 1.35rem/1 var(--sans); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.acc.pre .track .fill { transform: scaleX(0); }
+/* accuracy: one ring per model, from a coin flip (empty) to always right (full) */
+.rings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 40px; }
+.ring-card {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 20px;
+  padding: 22px 24px; border-radius: 24px; background: var(--glass); border: 1px solid var(--line);
+  transition: transform 0.4s var(--ease), border-color 0.3s;
+}
+.ring-card:hover { transform: translateY(-3px); border-color: var(--line-2); }
+.ring { position: relative; width: 124px; height: 124px; }
+.ring svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.ring .track { fill: none; stroke: var(--panel-3); stroke-width: 11; }
+.ring .arc {
+  fill: none; stroke-width: 11; stroke-linecap: round;
+  transition: stroke-dashoffset 1.8s var(--ease) var(--d, 0ms);
+  filter: drop-shadow(0 0 7px rgba(255, 236, 214, calc(0.45 * var(--glow-strength))));
+}
+.ring .val { position: absolute; inset: 0; display: grid; place-content: center; font: 750 1.55rem/1 var(--sans); letter-spacing: -0.03em; }
+.ring-name { display: flex; align-items: center; gap: 9px; font-weight: 750; font-size: 1.05rem; }
+.ring-name svg { width: 19px; height: 19px; color: var(--ink-2); }
+.ring-sub { margin-top: 6px; font-size: 0.86rem; color: var(--ink-2); }
+.ring-ci { margin-top: 3px; font-size: 0.78rem; color: var(--ink-3); }
 
 /* check it yourself */
 .checks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 36px; }
@@ -690,6 +728,13 @@ svg { display: block; }
 .btn:hover { opacity: 0.92; }
 .btn:active { transform: scale(0.97); }
 .check-result { margin-top: 10px !important; font-weight: 650; color: var(--ink) !important; min-height: 1.5em; }
+/* one row of lights per model, one light per stored test input */
+.canary-grid { display: grid; grid-template-columns: 18px repeat(8, 13px); gap: 8px 10px; align-items: center; margin-top: 18px; }
+.cv-icon { display: grid; place-items: center; color: var(--ink-3); }
+.cv-icon svg { width: 16px; height: 16px; }
+.cv { width: 13px; height: 13px; border-radius: 50%; background: var(--panel-3); box-shadow: inset 0 0 0 1px var(--line); transition: background 0.25s, transform 0.3s var(--ease), box-shadow 0.3s; }
+.cv.ok { background: #2fb98a; transform: scale(1.15); box-shadow: 0 0 10px rgba(47, 185, 138, calc(0.7 * var(--glow-strength))); }
+.cv.bad { background: var(--rose); }
 code, .hash { font-family: var(--mono); font-size: 0.82em; }
 .fingerprint { display: block; margin-top: 10px; padding: 8px 10px; border-radius: 9px; background: var(--grey-wash); overflow-wrap: anywhere; font-family: var(--mono); font-size: 0.76rem; color: var(--ink-2); }
 
@@ -817,6 +862,12 @@ pre.cmd {
   .inst-body { grid-template-columns: 290px minmax(0, 1fr) 310px; }
 }
 @media (max-width: 1060px) {
+  .hero { min-height: 0; padding-bottom: 72px; }
+  .hero-grid { grid-template-columns: minmax(0, 1fr); }
+  .hero h1 { max-width: 18ch; }
+  .sky { width: min(100%, 620px); }
+  .scroll-cue { display: none; }
+  .rings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .inst-body {
     grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
     grid-template-areas: "stage why" "patient patient";
@@ -827,22 +878,21 @@ pre.cmd {
   .patient-head { border-bottom: 1px solid var(--line); }
   .prows-cols { columns: 2; column-gap: 8px; }
   .pgroup { position: static; background: none; }
-  .acc-axis, .acc-row { grid-template-columns: 180px minmax(0, 1fr) 70px; }
 }
 @media (max-width: 920px) {
   .nav .nav-hide { display: none; }
   .picker { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); padding-right: 28px; }
   .live-pill { display: none; }
-  .story { grid-template-columns: 1fr; gap: 0; }
+  .story { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .story-stage { display: none; }
   .story-step { min-height: 0; opacity: 1; padding: 34px 0 6px; border-top: 1px solid var(--line); }
   .story-inline { display: block; margin-top: 18px; }
   .story-inline .story-card { position: static; opacity: 1; transform: none; pointer-events: auto; box-shadow: none; }
-  .checks, .method-grid, .site-cards { grid-template-columns: 1fr; }
-  .lab-charts, .prov-grid, .foot-grid { grid-template-columns: 1fr; }
+  .checks, .method-grid, .site-cards { grid-template-columns: minmax(0, 1fr); }
+  .lab-charts, .prov-grid, .foot-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 720px) {
-  .inst-body { grid-template-columns: 1fr; grid-template-areas: "stage" "why" "patient"; }
+  .inst-body { grid-template-columns: minmax(0, 1fr); grid-template-areas: "stage" "why" "patient"; }
   .why { border-left: 0; border-top: 1px solid var(--line); padding: 20px 18px; }
   .prows-cols { columns: 1; }
   .hero-head { display: block; }
@@ -850,15 +900,20 @@ pre.cmd {
   .hero-ctas { margin-top: 16px; }
 }
 @media (max-width: 600px) {
+  .rings { grid-template-columns: minmax(0, 1fr); }
+  .ring-card { padding: 18px; gap: 16px; }
+  .ring { width: 104px; height: 104px; }
   .topbar-inner { gap: 10px; }
   .nav a { padding: 8px 9px; }
   .nav .nav-source span { display: none; }
   .seg-opt span { padding: 8px 12px; }
-  .acc-axis, .acc-row { grid-template-columns: 108px minmax(0, 1fr) 56px; gap: 10px; }
-  .acc-name { font-size: 0.86rem; gap: 7px; }
-  .acc-name svg { display: none; }
-  .acc-val { font-size: 1.05rem; }
   .story-card { padding: 18px; }
+}
+@media (max-width: 370px) {
+  .brand { font-size: 1.4rem; gap: 8px; }
+  .brand svg { width: 24px; height: 24px; }
+  .topbar-inner { gap: 8px; }
+  .nav .nav-source { display: none; }
 }
 @media (min-width: 721px) { .peek { display: none; } }
 
@@ -866,6 +921,7 @@ pre.cmd {
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
   .ambient span { animation: none; }
+  .js .reveal { opacity: 1; transform: none; filter: none; }
 }
 @media (forced-colors: active) {
   .pick[aria-selected="true"], .tab[aria-selected="true"], .rec[aria-pressed="true"] { outline: 2px solid CanvasText; }
@@ -905,15 +961,29 @@ pre.cmd {
 <div class="view" id="view-demo">
 
 <section class="hero" aria-labelledby="hero-title">
-  <div class="wrap">
-    <div class="hero-head">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
       <h1 id="hero-title">Six disease-risk models that run in your browser and show their work.</h1>
-      <p class="lede">Pick a condition and a real patient, then watch the model decide. Every petal is one answer pushing the risk up or down, and nothing you enter leaves this tab.</p>
+      <p class="lede">Every light here is a real patient. The nearer the centre, the higher the risk the model gave them, scored by a model that never trained on them. Rose lights had the condition; blue lights did not.</p>
       <div class="hero-ctas">
-        <a class="cta primary" href="#demo" id="cta-try">Change an answer<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg></a>
+        <a class="cta primary" href="#demo" id="cta-try">Try a real patient<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg></a>
         <a class="cta ghost" href="#how">How it works</a>
       </div>
+      <div class="sky-picker" id="sky-picker" role="group" aria-label="Show the patients for"></div>
     </div>
+    <figure class="sky" id="sky-figure">
+      <canvas id="sky" role="img"></canvas>
+      <div class="sky-tip" id="sky-tip" hidden></div>
+      <figcaption class="sky-caption" id="sky-caption"></figcaption>
+    </figure>
+  </div>
+  <a class="scroll-cue" href="#meet" aria-label="Scroll to meet one patient"><span></span></a>
+</section>
+
+<section class="section meet" id="meet" aria-labelledby="meet-title">
+  <div class="wrap">
+    <h2 id="meet-title" class="reveal">Now meet one patient</h2>
+    <p class="section-lede reveal">Load a real record or change any answer. The rose redraws as you go: each petal is one answer, pushing the risk up or down.</p>
 
     <div class="instrument" id="demo" data-set="none">
       <div class="inst-top">
@@ -923,7 +993,7 @@ pre.cmd {
       <div class="inst-body">
         <section class="patient" aria-labelledby="patient-title">
           <div class="patient-head">
-            <div class="patient-title"><h2 id="patient-title">Patient</h2><span id="answered"></span></div>
+            <div class="patient-title"><h3 id="patient-title">Patient</h3><span id="answered"></span></div>
             <p class="cond-intro" id="cond-intro"></p>
             <div class="records" id="records" role="group" aria-label="Load a real record"></div>
             <p class="record-line" id="record-line"></p>
@@ -937,10 +1007,10 @@ pre.cmd {
             <span><i class="down"></i>Pushes it down</span>
             <span><i class="seed"></i>Not answered</span>
           </div>
-          <p class="stage-caption" id="stage-caption">Each petal is one answer. Its size is how far that answer moves the score from where an ordinary patient’s answer would put it.</p>
+          <p class="stage-caption" id="stage-caption">A petal’s size is how far that answer moves the score from where an ordinary patient’s answer would put it.</p>
         </div>
         <section class="why" id="calc-result" aria-labelledby="why-title">
-          <h2 class="visually-hidden" id="why-title">Result</h2>
+          <h3 class="visually-hidden" id="why-title">Result</h3>
           <div id="why-body"></div>
         </section>
       </div>
@@ -957,8 +1027,8 @@ pre.cmd {
 
 <section class="section" id="how" aria-labelledby="how-title">
   <div class="wrap">
-    <h2 id="how-title">How it works</h2>
-    <p class="section-lede">Four steps run every time you change an answer, all of them inside this page. The pictures are drawn from the patient in the demo above.</p>
+    <h2 id="how-title" class="reveal">How it works</h2>
+    <p class="section-lede reveal">Four steps run every time you change an answer, all of them inside this page. The pictures are drawn from the patient in the demo above.</p>
     <div class="story">
       <ol class="story-steps" id="story-steps">
         <li class="story-step" data-step="0">
@@ -1009,9 +1079,9 @@ pre.cmd {
 
 <section class="section" id="accuracy" aria-labelledby="accuracy-title">
   <div class="wrap">
-    <h2 id="accuracy-title">How often each model gets the order right</h2>
-    <p class="section-lede">Show a model one patient who had the condition and one who did not. This is how often it gives the higher risk to the one who had it, measured on patients it never trained on.</p>
-    <div class="acc pre" id="acc"></div>
+    <h2 id="accuracy-title" class="reveal">How often each model gets the order right</h2>
+    <p class="section-lede reveal">Show a model one patient who had the condition and one who did not. This is how often it gives the higher risk to the one who had it, measured on patients it never trained on.</p>
+    <div class="rings" id="acc"></div>
     <p class="caption" id="acc-caption"></p>
     <a class="text-link" href="#m-overview">See every measurement</a>
   </div>
@@ -1019,8 +1089,8 @@ pre.cmd {
 
 <section class="section" id="check" aria-labelledby="check-title">
   <div class="wrap">
-    <h2 id="check-title">Check it yourself</h2>
-    <div class="checks">
+    <h2 id="check-title" class="reveal">Check it yourself</h2>
+    <div class="checks reveal">
       <div class="check">
         <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="12" rx="2"/><path d="M8 20.5h8M12 17v3.5"/></svg>
         <h3>Nothing leaves this tab</h3>
@@ -1030,6 +1100,7 @@ pre.cmd {
         <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>
         <h3>The same answers as Python</h3>
         <p id="check-copy"></p>
+        <div class="canary-grid" id="canary-grid" aria-hidden="true"></div>
         <button class="btn" id="run-check" type="button">Run the check</button>
         <p class="check-result" id="check-result" aria-live="polite"></p>
       </div>
@@ -1144,9 +1215,9 @@ pre.cmd {
       <div>
         <h3 style="margin:0;font-size:1rem">Verify every artifact</h3>
         <p class="caption" style="font-size:0.9rem;color:var(--ink-2)">Each artifact is SHA-256 hashed into a manifest, and the manifest is signed with an Ed25519 key that never enters the repository. This recomputes every hash and checks the signature.</p>
-        <pre class="cmd">pip install -e . &amp;&amp; nightingale verify</pre>
+        <pre class="cmd" tabindex="0" role="region" aria-label="Command that verifies every artifact">pip install -e . &amp;&amp; nightingale verify</pre>
         <h3 style="margin:22px 0 0;font-size:1rem">Confirm the public key</h3>
-        <pre class="cmd">openssl pkey -pubin -in provenance/pubkey.pem \
+        <pre class="cmd" tabindex="0" role="region" aria-label="Command that prints the public key fingerprint">openssl pkey -pubin -in provenance/pubkey.pem \
   -outform DER | tail -c 32 | shasum -a 256</pre>
       </div>
       <div class="hashes" id="prov-hashes"></div>
@@ -1552,9 +1623,13 @@ function effectiveTheme() {
     try { localStorage.setItem('nightingale-theme', next); } catch (e) { /* private mode */ }
     document.documentElement.setAttribute('data-theme', next);
     paint();
+    window.dispatchEvent(new Event('themechange'));
   });
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
-    if (!document.documentElement.getAttribute('data-theme')) { paint(); }
+    if (!document.documentElement.getAttribute('data-theme')) {
+      paint();
+      window.dispatchEvent(new Event('themechange'));
+    }
   });
 })();
 
@@ -1711,6 +1786,10 @@ function selectCondition(slug) {
   buildPatient();
   mountRose(c);
   score();
+  if (sky) {
+    skyShow(c);
+    paintSkyPicker();
+  }
 }
 
 var RECORD_WORDS = { had: 'Had it', had_not: 'Did not', close_call: 'Close call' };
@@ -1762,10 +1841,10 @@ function paintRecords() {
   line.textContent = '';
   if (state.source) {
     var outcome = state.source.outcome === 1 ? c.ui.had : c.ui.had_not;
-    line.appendChild(document.createTextNode((state.edited ? 'Edited from record ' : 'Record ') +
-      count(state.source.row) + ' of ' + count(c.n) + ', recorded outcome: '));
+    line.appendChild(document.createTextNode((state.edited ? 'Edited from real record ' : 'Real record ') +
+      count(state.source.row) + ' of ' + count(c.n) + '. Outcome: '));
     line.appendChild(el('strong', null, outcome.toLowerCase()));
-    line.appendChild(document.createTextNode('. A typical record from the training data: it shows how the model works, not how accurate it is.'));
+    line.appendChild(document.createTextNode('. A typical record, here to show how the model works, not how accurate it is.'));
   } else {
     line.textContent = 'Your own answers. Leave anything you do not know blank.';
   }
@@ -2698,6 +2777,321 @@ function cellText(value) {
 }
 
 /* ------------------------------------------------------------------ *
+ *  The opening: every patient the model has scored, as a light
+ *
+ *  One light per patient in the out-of-fold sample baked into the page:
+ *  the whole cohort for five conditions, a seeded 2,000 for diabetes. A
+ *  light's distance from the centre is the risk the model gave that
+ *  patient while it had never trained on them -- the nearer, the higher --
+ *  and its colour is what really happened. Angles step by the golden
+ *  angle so neighbours never share a ray. The lights arrive once from
+ *  scattered places, then drift slowly; switching condition sends each one
+ *  to its new place. Nothing is drawn while the opening is off screen.
+ * ------------------------------------------------------------------ */
+var GOLDEN = Math.PI * (3 - Math.sqrt(5));
+var sky = null;
+
+function cssColour(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function withAlpha(hex, alpha) {
+  var h = hex.replace('#', '');
+  if (h.length === 3) { h = h.split('').map(function (ch) { return ch + ch; }).join(''); }
+  var n = parseInt(h, 16);
+  return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + alpha + ')';
+}
+function lightSprite(core, halo, radius, haloStrength) {
+  var size = Math.ceil(radius * 2);
+  var canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  var g = canvas.getContext('2d');
+  var gradient = g.createRadialGradient(radius, radius, 0, radius, radius, radius);
+  gradient.addColorStop(0, core);
+  gradient.addColorStop(0.17, core);
+  gradient.addColorStop(0.34, withAlpha(halo, 0.5 * haloStrength));
+  gradient.addColorStop(1, withAlpha(halo, 0));
+  g.fillStyle = gradient;
+  g.fillRect(0, 0, size, size);
+  return canvas;
+}
+function hash01(i) {
+  var x = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+function setUpSky() {
+  var canvas = $('sky');
+  sky = {
+    canvas: canvas, ctx: canvas.getContext('2d'), dots: [], leaving: [], w: 0, h: 0, dpr: 1,
+    rot: 0, last: 0, visible: true, hover: -1, condition: null, sprites: null, raf: 0, moving: false
+  };
+  function paintSprites() {
+    var dark = effectiveTheme() === 'dark';
+    var r = 10 * sky.dpr;
+    sky.dark = dark;
+    sky.sprites = {
+      up: lightSprite(cssColour(dark ? '--rose-hi' : '--rose'), cssColour('--rose'), r, dark ? 1 : 0.55),
+      down: lightSprite(cssColour(dark ? '--blue-hi' : '--blue'), cssColour('--blue'), r, dark ? 1 : 0.55)
+    };
+    sky.ink = cssColour('--ink-2');
+    sky.line = cssColour('--line-2');
+    sky.pill = withAlpha(cssColour('--bg'), 0.82);
+  }
+  function resize() {
+    var box = canvas.getBoundingClientRect();
+    if (!box.width) { return; }
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    var oldDpr = sky.dpr;
+    sky.dpr = dpr;
+    sky.w = box.width;
+    sky.h = box.width;
+    canvas.width = Math.round(box.width * dpr);
+    canvas.height = Math.round(box.width * dpr);
+    if (!sky.sprites || oldDpr !== dpr) { paintSprites(); }
+    drawSky(performance.now());
+  }
+  paintSprites();
+  resize();
+  if ('ResizeObserver' in window) { new ResizeObserver(resize).observe(canvas); }
+  else { window.addEventListener('resize', resize); }
+  window.addEventListener('themechange', function () { paintSprites(); drawSky(performance.now()); });
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(function (entries) {
+      sky.visible = entries[0].isIntersecting;
+      if (sky.visible) { wakeSky(); }
+    }).observe(canvas);
+  }
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) { wakeSky(); } });
+
+  var tip = $('sky-tip');
+  canvas.addEventListener('pointermove', function (event) {
+    var box = canvas.getBoundingClientRect();
+    var x = event.clientX - box.left, y = event.clientY - box.top;
+    var best = -1, bestD = 196;
+    sky.dots.forEach(function (dot, i) {
+      var dx = dot.x - x, dy = dot.y - y, d = dx * dx + dy * dy;
+      if (d < bestD) { bestD = d; best = i; }
+    });
+    if (best !== sky.hover) {
+      sky.hover = best;
+      if (best >= 0) {
+        var dot = sky.dots[best];
+        tip.textContent = riskText(dot.p) + ' risk. ' + (dot.had ? sky.condition.ui.had : sky.condition.ui.had_not) + '.';
+        tip.style.left = (dot.x / sky.w * 100) + '%';
+        tip.style.top = (dot.y / sky.h * 100) + '%';
+        tip.hidden = false;
+      } else {
+        tip.hidden = true;
+      }
+      drawSky(performance.now());
+    }
+  });
+  canvas.addEventListener('pointerleave', function () {
+    sky.hover = -1;
+    tip.hidden = true;
+    drawSky(performance.now());
+  });
+}
+
+function skyRadius() { return Math.min(sky.w, sky.h) / 2 * 0.9; }
+function skyTarget(dot) {
+  var R = skyRadius(), R0 = R * 0.08;
+  var r = R0 + (R - R0) * (1 - dot.p) + dot.jit * R * 0.05;
+  r = Math.min(R, Math.max(R0 * 0.4, r));
+  var a = dot.theta + sky.rot;
+  return [sky.w / 2 + r * Math.cos(a), sky.h / 2 + r * Math.sin(a)];
+}
+
+function skyShow(condition) {
+  var first = !sky.condition;
+  var oof = condition.oof;
+  var now = performance.now();
+  var old = sky.dots;
+  var R = skyRadius();
+  sky.leaving = old.slice(oof.p.length).map(function (dot) { return { x: dot.x, y: dot.y, had: dot.had, t0: now }; });
+  sky.dots = oof.p.map(function (p, i) {
+    var prev = old[i];
+    var dot = { p: p, had: oof.y[i] === 1, theta: i * GOLDEN, jit: hash01(i) - 0.5, phase: hash01(i + 7) * 6.283 };
+    if (prev) {
+      dot.sx = prev.x;
+      dot.sy = prev.y;
+    } else if (first) {
+      var a = hash01(i + 11) * 6.283, d = R * (0.35 + 1.1 * hash01(i + 13));
+      dot.sx = sky.w / 2 + d * Math.cos(a);
+      dot.sy = sky.h / 2 + d * Math.sin(a);
+    } else {
+      dot.sx = sky.w / 2;
+      dot.sy = sky.h / 2;
+    }
+    dot.x = dot.sx;
+    dot.y = dot.sy;
+    dot.t0 = now;
+    dot.delay = REDUCED_MOTION ? 0 : (first ? 150 + hash01(i + 3) * 1100 : hash01(i + 5) * 380);
+    dot.dur = REDUCED_MOTION ? 0 : (first ? 1900 : 1150);
+    return dot;
+  });
+  sky.condition = condition;
+  sky.hover = -1;
+  $('sky-tip').hidden = true;
+  var had = oof.y.filter(function (y) { return y === 1; }).length;
+  var caption = $('sky-caption');
+  caption.textContent = '';
+  var up = el('span'); up.appendChild(el('i', 'up')); up.appendChild(document.createTextNode(condition.ui.had));
+  var down = el('span'); down.appendChild(el('i', 'down')); down.appendChild(document.createTextNode(condition.ui.had_not));
+  var many = el('span', 'count', oof.sampled
+    ? count(oof.n_shown) + ' of ' + count(oof.n_total) + ' ' + condition.ui.noun + ', drawn at random'
+    : count(oof.n_shown) + ' ' + condition.ui.noun);
+  caption.appendChild(up);
+  caption.appendChild(down);
+  caption.appendChild(many);
+  sky.canvas.setAttribute('aria-label', count(oof.n_shown) + ' real ' + condition.ui.noun + ' for ' + condition.ui.name.toLowerCase() +
+    ', each placed by the risk the model gave them: the nearer the centre, the higher. ' + count(had) + ' of them: ' + condition.ui.had.toLowerCase() + '.');
+  wakeSky();
+}
+
+function wakeSky() {
+  if (!sky || sky.raf || !sky.visible || document.hidden) { return; }
+  sky.last = performance.now();
+  sky.raf = requestAnimationFrame(skyFrame);
+}
+function skyFrame(now) {
+  sky.raf = 0;
+  drawSky(now);
+  if (sky.visible && !document.hidden && (!REDUCED_MOTION || sky.moving)) { sky.raf = requestAnimationFrame(skyFrame); }
+}
+
+function drawSky(now) {
+  if (!sky || !sky.w) { return; }
+  var ctx = sky.ctx, w = sky.w, h = sky.h, dpr = sky.dpr;
+  var dt = Math.min(64, now - (sky.last || now));
+  sky.last = now;
+  if (!REDUCED_MOTION) { sky.rot += dt * 0.000022; }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  var cx = w / 2, cy = h / 2, R = skyRadius(), R0 = R * 0.08;
+
+  /* the lamp at the centre, where the highest risks gather */
+  var lamp = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.62);
+  lamp.addColorStop(0, sky.dark ? 'rgba(255, 176, 104, 0.30)' : 'rgba(255, 168, 86, 0.22)');
+  lamp.addColorStop(1, 'rgba(255, 176, 104, 0)');
+  ctx.fillStyle = lamp;
+  ctx.fillRect(0, 0, w, h);
+
+  /* the risk rings */
+  ctx.lineWidth = 1;
+  ctx.font = '600 11px Figtree, system-ui, sans-serif';
+  ctx.textAlign = 'left';
+  [0.9, 0.5, 0.1].forEach(function (p) {
+    var r = R0 + (R - R0) * (1 - p);
+    ctx.strokeStyle = sky.line;
+    ctx.globalAlpha = 0.7;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  });
+
+  /* the lights */
+  ctx.globalCompositeOperation = sky.dark ? 'lighter' : 'source-over';
+  var moving = false;
+  var size = sky.dots.length > 1000 ? 15 : 19;
+  sky.dots.forEach(function (dot, i) {
+    var target = skyTarget(dot);
+    var local = dot.dur ? (now - dot.t0 - dot.delay) / dot.dur : 1;
+    if (local < 1) { moving = true; }
+    local = Math.max(0, Math.min(1, local));
+    var e = 1 - Math.pow(1 - local, 3);
+    dot.x = dot.sx + (target[0] - dot.sx) * e;
+    dot.y = dot.sy + (target[1] - dot.sy) * e;
+    var twinkle = REDUCED_MOTION ? 0.92 : 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(now * 0.0016 + dot.phase));
+    ctx.globalAlpha = twinkle * (local > 0 || !dot.delay ? 1 : 0.6);
+    var s = i === sky.hover ? size * 1.9 : size;
+    ctx.drawImage(dot.had ? sky.sprites.up : sky.sprites.down, dot.x - s / 2, dot.y - s / 2, s, s);
+  });
+  sky.leaving = sky.leaving.filter(function (dot) {
+    var fade = 1 - (now - dot.t0) / 500;
+    if (fade <= 0) { return false; }
+    moving = true;
+    ctx.globalAlpha = fade;
+    ctx.drawImage(dot.had ? sky.sprites.up : sky.sprites.down, dot.x - size / 2, dot.y - size / 2, size, size);
+    return true;
+  });
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  [0.9, 0.5, 0.1].forEach(function (p) {
+    var r = R0 + (R - R0) * (1 - p);
+    var text = Math.round(p * 100) + '% risk';
+    var tw = ctx.measureText(text).width;
+    var x = cx - tw / 2, y = cy - r;
+    ctx.fillStyle = sky.pill;
+    ctx.beginPath();
+    if (ctx.roundRect) { ctx.roundRect(x - 7, y - 9, tw + 14, 18, 9); } else { ctx.rect(x - 7, y - 9, tw + 14, 18); }
+    ctx.fill();
+    ctx.fillStyle = sky.ink;
+    ctx.fillText(text, x, y + 4);
+  });
+  if (sky.hover >= 0 && sky.dots[sky.hover]) {
+    var hovered = sky.dots[sky.hover];
+    ctx.strokeStyle = sky.dark ? 'rgba(255, 255, 255, 0.85)' : 'rgba(16, 22, 42, 0.8)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(hovered.x, hovered.y, 8, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  sky.moving = moving;
+}
+
+function buildSkyPicker() {
+  var host = $('sky-picker');
+  ORDERED.forEach(function (c) {
+    var button = el('button', 'sky-pick');
+    button.type = 'button';
+    button.id = 'sky-' + c.slug;
+    button.innerHTML = icon(c.ui.icon);
+    button.appendChild(el('span', null, c.ui.name));
+    button.addEventListener('click', function () { selectCondition(c.slug); });
+    host.appendChild(button);
+  });
+  paintSkyPicker();
+}
+function paintSkyPicker() {
+  ORDERED.forEach(function (c) {
+    var button = $('sky-' + c.slug);
+    if (button) { button.setAttribute('aria-pressed', c.slug === currentSlug ? 'true' : 'false'); }
+  });
+}
+
+/* The rose leans a little toward the pointer, so it reads as an object
+   on the page rather than a picture of one. */
+(function tilt() {
+  if (REDUCED_MOTION || !window.matchMedia('(pointer: fine)').matches) { return; }
+  var stage = $('stage');
+  stage.addEventListener('pointermove', function (event) {
+    var box = stage.getBoundingClientRect();
+    var dx = (event.clientX - box.left) / box.width - 0.5;
+    var dy = (event.clientY - box.top) / box.height - 0.5;
+    $('rose').style.transform = 'perspective(1100px) rotateX(' + (-dy * 9).toFixed(2) + 'deg) rotateY(' + (dx * 9).toFixed(2) + 'deg)';
+  });
+  stage.addEventListener('pointerleave', function () { $('rose').style.transform = ''; });
+})();
+
+/* Section headings and groups rise into view the first time they appear. */
+(function reveal() {
+  var nodes = Array.prototype.slice.call(document.querySelectorAll('.reveal'));
+  if (REDUCED_MOTION || !('IntersectionObserver' in window)) {
+    nodes.forEach(function (node) { node.classList.add('in'); });
+    return;
+  }
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('in');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { rootMargin: '0px 0px -10% 0px' });
+  nodes.forEach(function (node) { observer.observe(node); });
+})();
+
+/* ------------------------------------------------------------------ *
  *  How it works: a scroll story
  *
  *  Four cards, one per step, each drawn from the patient in the demo. On
@@ -3022,55 +3416,55 @@ function setActiveStep(index) {
  * ------------------------------------------------------------------ */
 (function accuracy() {
   var host = $('acc');
-  var LO = 0.5, HI = 1;
-  var x = function (v) { return ((Math.min(HI, Math.max(LO, v)) - LO) / (HI - LO) * 100).toFixed(2) + '%'; };
-  var axis = el('div', 'acc-axis');
-  axis.appendChild(el('span'));
-  var ticks = el('div', 'ticks');
-  [[0.5, 'coin flip'], [0.6], [0.7], [0.8], [0.9], [1, 'always']].forEach(function (tick, index, all) {
-    var span = el('span', index === 0 ? 'edge-l' : index === all.length - 1 ? 'edge-r' : null, Math.round(tick[0] * 100) + '%' + (tick[1] ? ', ' + tick[1] : ''));
-    span.style.left = x(tick[0]);
-    ticks.appendChild(span);
-  });
-  axis.appendChild(ticks);
-  axis.appendChild(el('span'));
-  host.appendChild(axis);
-
-  ORDERED.slice().sort(function (a, b) { return b.roc_auc[0] - a.roc_auc[0]; }).forEach(function (c) {
-    var row = el('div', 'acc-row');
-    var name = el('div', 'acc-name');
-    name.innerHTML = icon(c.ui.icon);
-    name.appendChild(el('span', null, c.ui.name));
-    row.appendChild(name);
-    var track = el('div', 'track');
-    [0.6, 0.7, 0.8, 0.9].forEach(function (g) { var line = el('span', 'grid'); line.style.left = x(g); track.appendChild(line); });
-    var fillNode = el('span', 'fill');
-    fillNode.style.width = x(c.roc_auc[0]);
-    track.appendChild(fillNode);
-    var band = el('span', 'ci');
-    band.style.left = x(c.roc_auc[1]);
-    band.style.width = 'calc(' + x(c.roc_auc[2]) + ' - ' + x(c.roc_auc[1]) + ')';
-    track.appendChild(band);
-    var point = el('span', 'pt');
-    point.style.left = x(c.roc_auc[0]);
-    track.appendChild(point);
+  var arcs = [];
+  ORDERED.slice().sort(function (a, b) { return b.roc_auc[0] - a.roc_auc[0]; }).forEach(function (c, index) {
+    var card = el('div', 'ring-card');
+    card.style.setProperty('--d', (index * 110) + 'ms');
+    var ring = el('div', 'ring');
+    var size = 124, r = 52, C = 2 * Math.PI * r;
+    /* Empty is a coin flip and full is always right, so the weak models
+       look weak: 0.67 fills a third of the ring, not two thirds of it. */
+    var fill = Math.max(0, Math.min(1, (c.roc_auc[0] - 0.5) / 0.5));
+    var svg = svgEl('svg', { viewBox: '0 0 ' + size + ' ' + size, 'aria-hidden': 'true' });
+    var gradient = svgEl('linearGradient', { id: 'ring-' + c.slug, x1: 0, y1: 0, x2: 1, y2: 1 }, svgEl('defs', {}, svg));
+    svgEl('stop', { offset: 0, style: 'stop-color:var(--ink)' }, gradient);
+    svgEl('stop', { offset: 1, style: 'stop-color:var(--ink-3)' }, gradient);
+    svgEl('circle', { cx: size / 2, cy: size / 2, r: r, 'class': 'track' }, svg);
+    var arcNode = svgEl('circle', {
+      cx: size / 2, cy: size / 2, r: r, 'class': 'arc', stroke: 'url(#ring-' + c.slug + ')',
+      'stroke-dasharray': C.toFixed(2), 'stroke-dashoffset': C.toFixed(2)
+    }, svg);
+    arcs.push([arcNode, (C * (1 - fill)).toFixed(2)]);
+    ring.appendChild(svg);
     var value = c.roc_auc[0] * 100;
     var label = value >= 99.5 ? value.toFixed(1) + '%' : Math.round(value) + '%';
-    row.title = c.ui.name + ': ROC-AUC ' + ci(c.roc_auc, 3);
-    row.setAttribute('aria-label', c.ui.name + ': right ' + label + ' of the time, 95% interval ' + pct(c.roc_auc[1], 1) + ' to ' + pct(c.roc_auc[2], 1) + '.');
-    row.setAttribute('role', 'group');
-    row.appendChild(track);
-    row.appendChild(el('div', 'acc-val', label));
-    host.appendChild(row);
+    ring.appendChild(el('div', 'val', label));
+    card.appendChild(ring);
+    var words = el('div');
+    var name = el('div', 'ring-name');
+    name.innerHTML = icon(c.ui.icon);
+    name.appendChild(el('span', null, c.ui.name));
+    words.appendChild(name);
+    words.appendChild(el('div', 'ring-sub', 'Ranks the right patient higher ' + label + ' of the time'));
+    words.appendChild(el('div', 'ring-ci', '95% interval ' + pct(c.roc_auc[1], 1) + ' to ' + pct(c.roc_auc[2], 1)));
+    card.appendChild(words);
+    card.setAttribute('role', 'group');
+    card.setAttribute('aria-label', c.ui.name + ': right ' + label + ' of the time, 95% interval ' + pct(c.roc_auc[1], 1) + ' to ' + pct(c.roc_auc[2], 1) + '.');
+    host.appendChild(card);
   });
-  $('acc-caption').textContent = 'The bar behind each dot is a 95% bootstrap interval from ' + count(NG.external.n_boot) +
-    ' resamples. Statisticians call this figure ROC-AUC; 50% is a coin flip. Cervical cancer and liver disease are the weak pair, and the page shows them that way rather than hiding them.';
+  $('acc-caption').textContent = 'Each ring fills from a coin flip (empty) to always right (full), so a weak model looks weak. ' +
+    'Statisticians call this figure ROC-AUC; the intervals come from ' + count(NG.external.n_boot) +
+    ' bootstrap resamples. Cervical cancer and liver disease are the weak pair, and the page shows them as they are.';
+  function fillRings() { arcs.forEach(function (pair) { pair[0].setAttribute('stroke-dashoffset', pair[1]); }); }
   if ('IntersectionObserver' in window && !REDUCED_MOTION) {
     new IntersectionObserver(function (entries, observer) {
-      if (entries[0].isIntersecting) { host.classList.remove('pre'); observer.disconnect(); }
-    }, { threshold: 0.3 }).observe(host);
+      if (entries[0].isIntersecting) {
+        requestAnimationFrame(fillRings);
+        observer.disconnect();
+      }
+    }, { threshold: 0.25 }).observe(host);
   } else {
-    host.classList.remove('pre');
+    fillRings();
   }
 })();
 
@@ -3082,17 +3476,42 @@ function setActiveStep(index) {
   $('check-copy').textContent = 'Each model carries ' + per + ' stored test inputs and the probability the Python code gives them. ' +
     'This page can score all ' + CONDITIONS.length * per + ' again, right now, with the engine you just used.';
   $('check-fingerprint').textContent = NG.provenance.pubkey_fingerprint;
-  $('run-check').addEventListener('click', function () {
-    var total = 0, worst = 0, matched = 0;
-    CONDITIONS.forEach(function (condition) {
-      var report = checkCanaries(condition.model);
-      total += condition.model.canaries.inputs.length;
-      worst = Math.max(worst, report.max_abs_diff);
-      if (report.ok) { matched += condition.model.canaries.inputs.length; }
+  var grid = $('canary-grid');
+  grid.style.gridTemplateColumns = '18px repeat(' + per + ', 13px)';
+  var cells = [];
+  CONDITIONS.forEach(function (condition) {
+    var mark = el('span', 'cv-icon');
+    mark.innerHTML = icon(condition.ui.icon);
+    grid.appendChild(mark);
+    condition.model.canaries.inputs.forEach(function (input, i) {
+      var node = el('span', 'cv');
+      grid.appendChild(node);
+      cells.push({ node: node, model: condition.model, i: i });
     });
-    $('check-result').textContent = matched === total
-      ? 'All ' + total + ' reproduced. Largest difference: ' + (worst === 0 ? '0' : worst.toExponential(2)) + '.'
-      : (total - matched) + ' of ' + total + ' did not reproduce (largest difference ' + worst.toExponential(2) + ').';
+  });
+  $('run-check').addEventListener('click', function () {
+    var button = $('run-check');
+    button.disabled = true;
+    $('check-result').textContent = '';
+    var worst = 0, failed = 0;
+    var results = cells.map(function (cell) {
+      var diff = Math.abs(predict(cell.model, cell.model.canaries.inputs[cell.i]).p_cal - cell.model.canaries.p_cal[cell.i]);
+      worst = Math.max(worst, diff);
+      var ok = diff <= cell.model.canaries.tolerance;
+      if (!ok) { failed += 1; }
+      return ok;
+    });
+    cells.forEach(function (cell) { cell.node.className = 'cv'; });
+    var step = REDUCED_MOTION ? 0 : 32;
+    cells.forEach(function (cell, index) {
+      setTimeout(function () { cell.node.className = 'cv ' + (results[index] ? 'ok' : 'bad'); }, index * step);
+    });
+    setTimeout(function () {
+      $('check-result').textContent = failed === 0
+        ? 'All ' + cells.length + ' reproduced. Largest difference: ' + (worst === 0 ? '0' : worst.toExponential(2)) + '.'
+        : failed + ' of ' + cells.length + ' did not reproduce (largest difference ' + worst.toExponential(2) + ').';
+      button.disabled = false;
+    }, cells.length * step + 150);
   });
 })();
 
@@ -3551,6 +3970,8 @@ window.addEventListener('hashchange', route);
  *  Start
  * ------------------------------------------------------------------ */
 buildPicker();
+setUpSky();
+buildSkyPicker();
 selectCondition(currentSlug);
 route();
 $('foot-commit').textContent = 'Models exported at commit ' + NG.provenance.commit.slice(0, 12) + '.';

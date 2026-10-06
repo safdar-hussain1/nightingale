@@ -6,12 +6,14 @@ Calibrated screening-triage risk models for six clinical conditions, built so
 every published number arrives with its uncertainty attached — and so the
 model you read about is provably the model that runs.
 
-**[Live dashboard](https://safdar-hussain1.github.io/nightingale/)** — pick a
-condition, load a real patient record or type in your own numbers, and get a
-calibrated risk, a verdict that can say "too close to call", and a rose whose
-petals are the answers that drove it. All six models run entirely in the
-visitor's browser, from the same exported bundles this repository ships; a
-second view on the same page holds every measurement with its interval.
+**[Live dashboard](https://safdar-hussain1.github.io/nightingale/)** — it opens
+on a field of lights, each one a real patient, placed by the risk from a model
+that never trained on that patient. Pick a condition, load a real patient
+record or type in your own numbers, and get a calibrated risk, a verdict that
+can say "too close to call", and a rose whose petals are the answers that drove
+it. All six models run entirely in the visitor's browser, from the same
+exported bundles this repository ships; a second view on the same page holds
+every measurement with its interval.
 
 ![dashboard](reports/figures/dashboard.png)
 
@@ -356,7 +358,7 @@ python3 -m http.server 8000 --directory docs
 ```
 
 ```
-HTTP 200  885046 bytes  text/html
+HTTP 200  903449 bytes  text/html
 ```
 
 Then open `http://localhost:8000`. Append `?selftest=1` to either scheme to
@@ -450,7 +452,7 @@ close, so no model was traded down for size:
 | liver-disease | 100 | 620 | 38,911 B | 6,720 B | 2.2% |
 
 All six together are 76,528 B gzipped. The whole dashboard, models and fonts
-inlined, is 885,046 B (213,272 B gzipped) in a single self-contained file.
+inlined, is 903,449 B (218,480 B gzipped) in a single self-contained file.
 
 ## Provenance — it's signed
 

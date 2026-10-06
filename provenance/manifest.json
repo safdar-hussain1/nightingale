@@ -6,7 +6,7 @@
     "data/cleaned/heart-disease.csv.gz": "271cc533e6c17291d89995877802c101b5c6caa70c48a9916ddc95e5863292cc",
     "data/cleaned/kidney-disease.csv.gz": "d9eb4a4beae437ceb13dedb9d3372d44388799e9ee519d1fd58e9223781fe61c",
     "data/cleaned/liver-disease.csv.gz": "adfd34570ba7580089de1e1a4486cb3095c0bcc312e8e3b8859dd8ceda1b69a5",
-    "docs/index.html": "164c5cf1590c27169f34b497e8ed286a41b7f97400b44e0c4a4def964e961fd0",
+    "docs/index.html": "b5068cc6888f6e51f4831b75ed335ee9bd03f68d59e346db13a60ffadfb1c622",
     "models/breast-cancer/metrics.json": "f8e9482af3d76469ab0c936ef531723b0a7a9c5e39415a392e778e152ec07b91",
     "models/breast-cancer/model.json": "8fd0234e46041b7b9837146a1efffc8093b0d7a9b0a90fa2c7239bab5ec31d3c",
     "models/cervical-cancer/metrics.json": "fe26b723e952c51b85006bd7f71db9057a6577fb2a55c4edad24b2c3981afff2",
@@ -24,7 +24,7 @@
     "reports/figures/breast-cancer-reliability.png": "d86f8762bf0066294bb8f7415ca39ff7f488234a8cbbbb3dbd1446b6ace1df96",
     "reports/figures/cervical-cancer-decision-curve.png": "df0be5f47c4ce8aa0d0a9ed127c9b6237028e51ac51445078ae4a14a95a7baf8",
     "reports/figures/cervical-cancer-reliability.png": "2645aec4e679ea172cfda1a470cbdad672e6d4262b37de9e3fcec110beb5aa82",
-    "reports/figures/dashboard.png": "cd783961f5f5271979520f732369405c24b63748299e1273d636217fdd473de5",
+    "reports/figures/dashboard.png": "8d60720db54f90511a43185284807e3ab5dfeacadcb49149d6ffd212d099d368",
     "reports/figures/diabetes-decision-curve.png": "3f8065f9881fabff389df51e4fe89cfc5075633e4b01763dba5afcd2c8e3c549",
     "reports/figures/diabetes-reliability.png": "6198964dff77a40c56726825067b6b6c8b6074131b57f308a63caf03b14bd4bc",
     "reports/figures/external-validation.png": "a260c1c29b90e298ece6275d24289c4f5e0ac4c8d53b97b35a01a765c53db3d0",
@@ -37,8 +37,8 @@
   },
   "meta": {
     "author": "Safdar Hussain",
-    "built_utc": "2026-10-06T17:19:38.663842Z",
-    "commit": "26f166dc56c34733e33c4384287faf0ee0a8c5b9"
+    "built_utc": "2026-10-06T19:20:50.140980Z",
+    "commit": "6abdf885755b5e13ad4403ba4c8e1221ab2a8313"
   },
-  "signature_b64": "uIWq1b5lxK+VMA2rv5bWQBu/RRuUTw2q/EWuWwnjE70PF3k9aqYtuujFpWOk+rWiTFikf6JrqJqHlJgTIrsRDg=="
+  "signature_b64": "8NCNWjs3fr+D6g2pi7eLVC7zWP2dYtqJCaZ+5KTuH8BfU0jmFyKmEna/pjTf8hic1jos795zF2QasvRid8MHCw=="
 }
